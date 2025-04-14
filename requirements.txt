@@ -1,0 +1,3 @@
+# Project dependencies will be listed here
+# Use 'pip freeze > requirements.txt' to update after installing packages
+# Or add packages manually, e.g., flask==2.x.x
