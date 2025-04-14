@@ -20,5 +20,6 @@ from django.urls import path, include # Make sure include is imported
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('core.urls')), # Include core app's URLs at the root
-    # Add other app URLs here later (e.g., path('auth/', include('auth_app.urls')))
+    path('auth/', include('authentication.urls')),
+# Add other app URLs here later (e.g., path('auth/', include('auth_app.urls')))
 ]
