@@ -1,10 +1,9 @@
-# src/core/urls.py
 from django.urls import path
-from . import views # Import views from the current directory
+from . import views # Import views from the current directory (core app)
 
-app_name = 'core' # Namespace for URL reversing (optional but good practice)
+app_name = 'core' # Optional: Add app namespace
 
 urlpatterns = [
-    # Map the root URL of this app ('') to the index view
-    path('', views.index, name='index'),
+    # path('', views.hello_world, name='hello'), # Remove or comment out old view
+    path('', views.index_view, name='index'), # Add path for the new index view
 ]

@@ -1,0 +1,49 @@
+<!-- QuizPy/templates/base.html -->
+{% load static %}<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}QuizPy{% endblock %}</title>
+    <!-- Link Bootstrap CSS -->
+    <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <!-- Optional: Link custom CSS -->
+    {% block extra_head %}{% endblock %}
+  </head>
+  <body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+      <div class="container">
+        <a class="navbar-brand" href="/">QuizPy</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <!-- Navigation items will go here -->
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="/">Home</a>
+            </li>
+            <!-- Add more links as needed -->
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}
+        <!-- Page specific content will go here -->
+        {% endblock %}
+    </main>
+
+    <footer class="mt-auto py-3 bg-light text-center">
+        <div class="container">
+            <span class="text-muted">QuizPy © {% now "Y" %}</span>
+        </div>
+    </footer>
+
+    <!-- Link Bootstrap JS Bundle (includes Popper) -->
+    <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+    <!-- Optional: Link custom JS -->
+    {% block extra_scripts %}{% endblock %}
+  </body>
+</html>

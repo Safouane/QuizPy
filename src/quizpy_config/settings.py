@@ -11,9 +11,29 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 from pathlib import Path
-
+import os
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+# Project ROOT is one level above BASE_DIR
+PROJECT_ROOT = os.path.dirname(BASE_DIR)
+
+
+# settings.py
+
+# BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Should already exist
+
+STATIC_URL = '/static/'
+
+import os
+# (Note: BASE_DIR in Django usually points to the src directory where manage.py is. BASE_DIR.parent goes up one level to the QuizPy root).
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR.parent, 'static'), # Points to QuizPy/static/
+]
+
+# For production, you'll also configure STATIC_ROOT and run collectstatic
+# STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles_prod')
 
 
 # Quick-start development settings - unsuitable for production
@@ -55,7 +75,7 @@ ROOT_URLCONF = 'quizpy_config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(PROJECT_ROOT, 'templates')],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
