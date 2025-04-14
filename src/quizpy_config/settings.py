@@ -47,6 +47,11 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+# Session expires after 1 hour of inactivity, but refreshes on activity
+SESSION_COOKIE_AGE = 1 * 60 * 60  # 8 hours in seconds
+SESSION_SAVE_EVERY_REQUEST = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False # Or True if preferred
+
 
 # Application definition
 
@@ -59,6 +64,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'authentication',
+    'quiz.apps.QuizConfig',
+
 ]
 
 MIDDLEWARE = [

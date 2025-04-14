@@ -9,35 +9,47 @@ from django.views.decorators.http import require_POST
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 
-@csrf_exempt # Use CSRF protection properly with frontend forms later
+# Import the decorator we created in AUTH-3
+from authentication.decorators import api_teacher_required  
+
+@csrf_exempt
 @require_POST
 def login_view(request):
+    print("--- LOGIN VIEW START ---") # ADD LOGGING
     try:
+        print("Request body:", request.body) # ADD LOGGING
         data = json.loads(request.body)
         username = data.get('username')
         password = data.get('password')
+        print(f"Attempting login for username: {username}") # ADD LOGGING
 
         if not username or not password:
+            print("!!! Missing username or password") # ADD LOGGING
             return JsonResponse({'error': 'Username and password required'}, status=400)
 
         user = authenticate(request, username=username, password=password)
 
         if user is not None:
-            # Check if the user is a staff member (or superuser) for teacher access
+            print(f"User '{username}' authenticated successfully. Is staff? {user.is_staff}") # ADD LOGGING
             if user.is_staff:
                 login(request, user)
-                # Session cookie is automatically set by Django's login function
+                print(f"Django login successful for {username}. Session key: {request.session.session_key}") # ADD LOGGING
                 return JsonResponse({'message': 'Login successful', 'username': user.username})
             else:
-                # If regular users existed, this would deny them teacher access
+                print(f"!!! User '{username}' is not staff. Denying access.") # ADD LOGGING
                 return JsonResponse({'error': 'Access denied. Not a teacher account.'}, status=403)
         else:
+            print(f"!!! Invalid credentials for username: {username}") # ADD LOGGING
             return JsonResponse({'error': 'Invalid credentials'}, status=401)
     except json.JSONDecodeError:
+        print("!!! Invalid JSON received") # ADD LOGGING
         return JsonResponse({'error': 'Invalid JSON format'}, status=400)
     except Exception as e:
-        # Log the exception e
+        print(f"!!! Unexpected error: {e}") # ADD LOGGING
+        # Log the exception e properly here in real code
         return JsonResponse({'error': 'An unexpected error occurred'}, status=500)
+    finally:
+         print("--- LOGIN VIEW END ---") # ADD LOGGING
 
 @csrf_exempt # Or require POST and use proper CSRF later
 def logout_view(request):
