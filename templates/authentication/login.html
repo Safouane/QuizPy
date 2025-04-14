@@ -1,0 +1,97 @@
+<!-- QuizPy/templates/authentication/login.html -->
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Teacher Login - QuizPy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-6 col-lg-4">
+    <h2 class="text-center mb-4">Teacher Login</h2>
+
+    <!-- Error Message Placeholder -->
+    <div id="errorMessage" class="alert alert-danger d-none" role="alert">
+      <!-- Error messages will be inserted here by JavaScript -->
+    </div>
+
+    <form id="loginForm">
+      {% csrf_token %} {# Add Django CSRF token for security #}
+      <div class="mb-3">
+        <label for="username" class="form-label">Username</label>
+        <input type="text" class="form-control" id="username" name="username" required>
+      </div>
+      <div class="mb-3">
+        <label for="password" class="form-label">Password</label>
+        <input type="password" class="form-control" id="password" name="password" required>
+      </div>
+      <div class="d-grid">
+          <button type="submit" class="btn btn-primary">
+              <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="loginSpinner"></span>
+              Login
+          </button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  document.getElementById('loginForm').addEventListener('submit', async function(event) {
+    event.preventDefault(); // Prevent default form submission
+
+    const usernameInput = document.getElementById('username');
+    const passwordInput = document.getElementById('password');
+    const errorMessageDiv = document.getElementById('errorMessage');
+    const loginButton = this.querySelector('button[type="submit"]');
+    const spinner = document.getElementById('loginSpinner');
+    const csrfToken = this.querySelector('[name=csrfmiddlewaretoken]').value; // Get CSRF token
+
+    // Clear previous errors and disable button
+    errorMessageDiv.classList.add('d-none');
+    errorMessageDiv.textContent = '';
+    loginButton.disabled = true;
+    spinner.classList.remove('d-none');
+
+
+    try {
+      const response = await fetch("{% url 'authentication:api_login' %}", { // Use Django URL tag
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRFToken': csrfToken // Include CSRF token in header
+        },
+        body: JSON.stringify({
+          username: usernameInput.value,
+          password: passwordInput.value
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Login successful - Redirect to home page for now
+        console.log('Login successful:', data);
+        errorMessageDiv.classList.remove('alert-danger', 'd-none');
+        errorMessageDiv.classList.add('alert-success'); // Change to success style
+        errorMessageDiv.textContent = 'Login successful! Redirecting...';
+        setTimeout(() => {
+            window.location.href = "{% url 'core:index' %}";
+        }, 1500); // 1.5 seconds delay
+      } else {
+        // Login failed - Display error message
+        errorMessageDiv.textContent = data.error || 'Login failed. Please try again.';
+        errorMessageDiv.classList.remove('d-none');
+        loginButton.disabled = false; // Re-enable button on failure
+         spinner.classList.add('d-none');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      errorMessageDiv.textContent = 'An error occurred during login. Please try again.';
+      errorMessageDiv.classList.remove('d-none');
+      loginButton.disabled = false; // Re-enable button on error
+       spinner.classList.add('d-none');
+    }
+  });
+</script>
+{% endblock %}

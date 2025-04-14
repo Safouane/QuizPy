@@ -6,6 +6,8 @@ from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt # For basic API usage without frontend form CSRF token initially
 from django.views.decorators.http import require_POST
+from django.shortcuts import render, redirect
+from django.contrib.auth.decorators import login_required
 
 @csrf_exempt # Use CSRF protection properly with frontend forms later
 @require_POST
@@ -54,3 +56,13 @@ def check_auth_status(request):
          return JsonResponse({'isAuthenticated': True, 'username': request.user.username})
     else:
          return JsonResponse({'isAuthenticated': False})
+
+def login_page_view(request):
+    """Renders the teacher login page."""
+    # If user is already logged in and is staff, redirect them away from login page
+    if request.user.is_authenticated and request.user.is_staff:
+        # --- MAKE SURE THIS LINE USES A VALID REDIRECT ---
+        # --- IT SHOULD BE redirect('core:index') or redirect('/') ---
+        # --- NOT redirect('teacher:dashboard') ---
+        return redirect('/') # Example using home page URL name
+    return render(request, 'authentication/login.html')
