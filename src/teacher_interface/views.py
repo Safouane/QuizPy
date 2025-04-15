@@ -33,3 +33,16 @@ def dashboard_view(request):
         # Add more summary data later (e.g., recent results count)
     }
     return render(request, 'teacher_interface/dashboard.html', context)
+
+@teacher_required
+def quiz_list_view(request):
+    """
+    Renders the page that will display the list of quizzes.
+    The actual data fetching happens via JavaScript calling API-1.
+    """
+    # We don't need to pass quiz data in the context here,
+    # as the frontend JS will fetch it asynchronously.
+    context = {
+        'username': request.user.username # Pass username for context if needed
+    }
+    return render(request, 'teacher_interface/quiz_list.html', context)

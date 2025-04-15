@@ -7,4 +7,6 @@ urlpatterns = [
     path('teacher/dashboard/', views.dashboard_view, name='dashboard'),
     # Add other teacher UI URLs here later
     # e.g., path('teacher/quizzes/', views.quiz_list_view, name='quiz_list'),
+    path('teacher/quizzes/', views.quiz_list_view, name='quiz_list'),
+
 ]
