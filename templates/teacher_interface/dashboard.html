@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Teacher Dashboard - QuizPy{% endblock %}
+
+{% block content %}
+<h1 class="mb-4">Teacher Dashboard</h1>
+<p class="lead mb-4">Welcome, {{ username }}!</p>
+
+{# Summary Cards Section #}
+<div class="row mb-4">
+  {# Card 1: Active Quizzes #}
+  <div class="col-md-4 mb-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <h5 class="card-title">Active Quizzes</h5>
+        <p class="card-text fs-1">{{ active_quizzes_count }}</p> {# Display count #}
+        <a href="{% url 'teacher_interface:quiz_list' %}" class="btn btn-primary">Manage Quizzes</a> {# Link to TCHR-2 #}
+      </div>
+      <div class="card-footer text-muted">
+        View and manage your active quizzes.
+      </div>
+    </div>
+  </div>
+
+  {# Card 2: Question Bank #}
+  <div class="col-md-4 mb-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <h5 class="card-title">Question Bank</h5>
+        <p class="card-text fs-1">{{ total_questions_count }}</p> {# Display count #}
+        {# --- MODIFIED LINK --- #}
+        <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-secondary">Add New Question</a> {# Link to TCHR-3 Create page #}
+        {# Link to Manage Questions (TCHR-4) later #}
+      </div>
+       <div class="card-footer text-muted">
+        Add, edit, and organize questions.
+      </div>
+    </div>
+  </div>
+
+  {# Card 3: View Results #}
+  <div class="col-md-4 mb-3">
+    <div class="card text-center h-100">
+      <div class="card-body">
+        <h5 class="card-title">Student Results</h5>
+         <p class="card-text fs-1">-</p> {# Placeholder for results count #}
+        <a href="#" class="btn btn-info disabled">View Results</a> {# Link to TCHR-9 (placeholder) #}
+      </div>
+       <div class="card-footer text-muted">
+        Review student performance and export data.
+      </div>
+    </div>
+  </div>
+   {# Add more cards for Settings, Import/Export etc. as needed #}
+</div>
+
+{# Quick Actions or Recent Activity Section (Optional) #}
+<div class="row">
+    <div class="col">
+        <h2>Quick Actions</h2>
+        {# Example: Button to create a new quiz directly #}
+        <a href="#" class="btn btn-success mb-3 disabled"> <i class="bi bi-plus-circle"></i> Create New Quiz </a> {# Link to TCHR-2 create action later #}
+        {# Add other quick links here #}
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }} {# Include parent block content #}
+    {# Optional: Add link to Bootstrap Icons if you want to use them #}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{% endblock %}

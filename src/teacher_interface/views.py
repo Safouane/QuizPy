@@ -73,3 +73,21 @@ def quiz_edit_view(request, quiz_id=None):
 
     return render(request, 'teacher_interface/quiz_edit_form.html', context)
 
+@teacher_required
+def question_edit_view(request, question_id=None):
+    """
+    Renders the question creation/editing form.
+    If question_id is provided, it's for editing.
+    If question_id is None, it's for creating a new question.
+    Actual data fetching/population for edit mode is handled by JavaScript.
+    """
+    context = {
+        'question_id': question_id,
+        'form_title': 'Edit Question' if question_id else 'Create New Question'
+    }
+    # Optionally pass categories fetched from existing questions for dropdown later
+    # data = load_data()
+    # categories = sorted(list(set(q.get('category', 'Uncategorized') for q in data.get('questions', []))))
+    # context['existing_categories'] = categories
+    return render(request, 'teacher_interface/question_edit_form.html', context)
+

@@ -30,10 +30,11 @@
 
                 {# Add Login/Logout/Dashboard Links conditionally #}
                 {% if user.is_authenticated and user.is_staff %}
-                  <li class="nav-item">
-                      {# Link to dashboard will go here later, placeholder for now #}
-                      <a class="nav-link" href="#">Teacher Dashboard</a>
-                  </li>
+                <li class="nav-item">
+                  {# <a class="nav-link" href="#">Teacher Dashboard</a> #}
+                  <a class="nav-link {% if request.resolver_match.view_name == 'teacher_interface:dashboard' %}active{% endif %}"
+                     href="{% url 'teacher_interface:dashboard' %}">Teacher Dashboard</a>
+                </li>
                   <li class="nav-item">
                       <a class="nav-link" href="#" onclick="event.preventDefault(); document.getElementById('logout-form-js').submit();">Logout ({{ user.username }})</a>
                   </li>

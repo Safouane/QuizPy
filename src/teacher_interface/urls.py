@@ -13,4 +13,8 @@ urlpatterns = [
     # URL for editing an existing quiz (passes quiz_id to the view)
     path('teacher/quizzes/<uuid:quiz_id>/edit/', views.quiz_edit_view, name='quiz_edit'),
 
+    path('teacher/questions/new/', views.question_edit_view, name='question_create'),
+    path('teacher/questions/<uuid:question_id>/edit/', views.question_edit_view, name='question_edit'),
+    
+
 ]

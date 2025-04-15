@@ -2,8 +2,8 @@
     "quizzes": [
         {
             "id": "13261f52-94a1-4e2a-8a26-2495a3c57f02",
-            "title": "My First Quiz",
-            "description": "Basics of Python",
+            "title": "My First Quiz (Updated)",
+            "description": "Basics of Python\n \\n [updated from the UI]",
             "questions": [],
             "config": {
                 "duration": null,
@@ -15,23 +15,35 @@
             },
             "archived": false,
             "versions": []
-        },
-        {
-            "id": "2b3c6d20-7eab-4bc0-babc-36d9fd2b2e6d",
-            "title": "My Updated Quiz Title",
-            "description": "Basics of Python 2",
-            "questions": [],
-            "config": {
-                "duration": 30,
-                "pass_score": 70,
-                "presentation_mode": "all",
-                "allow_back": true,
-                "randomize_questions": true,
-                "shuffle_answers": false
-            },
-            "archived": false,
-            "versions": []
         }
     ],
-    "questions": []
+    "questions": [
+        {
+            "id": "9aaa8efb-6015-4c3d-8da4-23d3038ba9ef",
+            "quiz_ids": [],
+            "text": "What is pirmi+pirmi?",
+            "type": "MCQ",
+            "options": [
+                {
+                    "id": "73d30d03-7865-46ef-9f16-33f009a7509f",
+                    "text": "12"
+                },
+                {
+                    "id": "b8b162a1-7e98-4991-99e8-e5c52ad7a6b5",
+                    "text": "khmsatch"
+                },
+                {
+                    "id": "b3e95929-2e27-49fe-94a4-5c3d03526cae",
+                    "text": "2 pirmiyat (adka tifl youtube video OG)"
+                }
+            ],
+            "correct_answer": [
+                "b3e95929-2e27-49fe-94a4-5c3d03526cae"
+            ],
+            "score": "4",
+            "difficulty": "Medium",
+            "category": "Memes",
+            "media_url": ""
+        }
+    ]
 }

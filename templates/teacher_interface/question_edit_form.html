@@ -1,0 +1,408 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ form_title }} - QuizPy{% endblock %}
+
+{% block content %}
+<h1>{{ form_title }}</h1>
+<hr>
+
+{# Form Submission Feedback Placeholders #}
+<div id="errorMessage" class="alert alert-danger d-none" role="alert"></div>
+<div id="successMessage" class="alert alert-success d-none" role="alert"></div>
+
+{# Loading indicator (for edit mode primarily) #}
+<div id="loadingSpinner" class="text-center my-5 d-none">
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    <p>Loading question details...</p>
+</div>
+
+<form id="questionForm" class="d-none"> {# Initially hidden until JS decides create/edit loaded #}
+    {% csrf_token %}
+    <input type="hidden" id="questionId" value="{{ question_id|default:'' }}">
+
+    {# --- Core Question Fields --- #}
+    <div class="row mb-3">
+        <div class="col-md-8">
+            <label for="questionText" class="form-label">Question Text <span class="text-danger">*</span></label>
+            <textarea class="form-control" id="questionText" rows="4" required></textarea>
+            {# Placeholder for potential Rich Text Editor integration later #}
+        </div>
+        <div class="col-md-4">
+            <label for="questionType" class="form-label">Question Type <span class="text-danger">*</span></label>
+            <select class="form-select" id="questionType" required>
+                <option value="" selected disabled>Select type...</option>
+                <option value="MCQ">Multiple Choice (Single/Multiple Correct)</option>
+                <option value="SHORT_TEXT">Short Text Answer</option>
+                {# <option value="MEDIA">Media Based (Not Implemented)</option> #}
+            </select>
+        </div>
+    </div>
+
+    {# --- Dynamic Section based on Type --- #}
+    <div id="mcqOptionsSection" class="mb-3 border p-3 rounded d-none">
+        <h5>Multiple Choice Options</h5>
+        <div id="mcqOptionsContainer">
+            {# Option input groups will be added here by JS #}
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary mt-2" id="addMcqOptionBtn">
+            <i class="bi bi-plus-circle"></i> Add Option
+        </button>
+        <small class="d-block mt-1 text-muted">Select the checkbox(es) for the correct answer(s).</small>
+    </div>
+
+    <div id="shortTextSection" class="mb-3 border p-3 rounded d-none">
+         <h5>Short Text Answer</h5>
+         <p class="text-muted"><small>Answers will be stored as entered by the student. Correctness typically requires manual review.</small></p>
+         {# Optional: Add field for acceptable answer keywords later #}
+    </div>
+
+     <div id="mediaSection" class="mb-3 border p-3 rounded d-none">
+         <h5>Media (Placeholder)</h5>
+         <p class="text-muted"><small>Functionality to upload/link media not yet implemented.</small></p>
+         <input type="text" class="form-control" id="mediaUrl" placeholder="Enter Media URL (future)" disabled>
+    </div>
+    {# --- End Dynamic Section --- #}
+
+
+    {# --- Additional Attributes --- #}
+    <div class="row mb-3">
+        <div class="col-md-4">
+             <label for="questionScore" class="form-label">Score/Points</label>
+             <input type="number" class="form-control" id="questionScore" value="1" min="0">
+        </div>
+         <div class="col-md-4">
+             <label for="questionDifficulty" class="form-label">Difficulty</label>
+             <select class="form-select" id="questionDifficulty">
+                 <option value="Easy">Easy</option>
+                 <option value="Medium" selected>Medium</option>
+                 <option value="Hard">Hard</option>
+             </select>
+        </div>
+        <div class="col-md-4">
+             <label for="questionCategory" class="form-label">Category/Tag</label>
+             <input type="text" class="form-control" id="questionCategory" placeholder="e.g., Algebra, History Ch.3">
+             {# Consider using datalist with existing_categories if passed from view #}
+        </div>
+    </div>
+
+    <hr>
+    <div class="d-flex justify-content-end">
+        {# TODO: Determine correct cancel destination (Dashboard? Question Bank?) #}
+        <a href="{% url 'teacher_interface:dashboard' %}" class="btn btn-secondary me-2">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="saveButton">
+             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="saveSpinner"></span>
+             <span id="saveButtonText">Save Question</span>
+        </button>
+    </div>
+</form>
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    // --- DOM Elements ---
+    const questionId = document.getElementById('questionId').value;
+    const questionForm = document.getElementById('questionForm');
+    const questionText = document.getElementById('questionText');
+    const questionType = document.getElementById('questionType');
+    const mcqOptionsSection = document.getElementById('mcqOptionsSection');
+    const mcqOptionsContainer = document.getElementById('mcqOptionsContainer');
+    const addMcqOptionBtn = document.getElementById('addMcqOptionBtn');
+    const shortTextSection = document.getElementById('shortTextSection');
+    const mediaSection = document.getElementById('mediaSection');
+    const questionScore = document.getElementById('questionScore');
+    const questionDifficulty = document.getElementById('questionDifficulty');
+    const questionCategory = document.getElementById('questionCategory');
+    const mediaUrlInput = document.getElementById('mediaUrl'); // Added
+
+    const errorMessageDiv = document.getElementById('errorMessage');
+    const successMessageDiv = document.getElementById('successMessage');
+    const saveButton = document.getElementById('saveButton');
+    const saveButtonText = document.getElementById('saveButtonText');
+    const saveSpinner = document.getElementById('saveSpinner');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+
+
+    // --- Event Listeners ---
+    questionType.addEventListener('change', handleQuestionTypeChange);
+    addMcqOptionBtn.addEventListener('click', addMcqOptionInput);
+    questionForm.addEventListener('submit', handleFormSubmit);
+    mcqOptionsContainer.addEventListener('click', handleOptionDelete); // Listener for deleting options
+
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        if (questionId) {
+            // Edit Mode
+            saveButtonText.textContent = 'Update Question';
+            showLoadingSpinner(true);
+            fetchQuestionDetails(questionId);
+        } else {
+            // Create Mode
+            handleQuestionTypeChange(); // Show/hide sections based on default "" type (i.e., hide all)
+            showFormContent(true); // Show the form immediately
+        }
+    });
+
+
+    // --- Core Logic Functions ---
+
+    function handleQuestionTypeChange() {
+        const selectedType = questionType.value;
+        // Hide all dynamic sections first
+        mcqOptionsSection.classList.add('d-none');
+        shortTextSection.classList.add('d-none');
+        mediaSection.classList.add('d-none');
+
+        // Show the relevant section
+        if (selectedType === 'MCQ') {
+            mcqOptionsSection.classList.remove('d-none');
+             // Ensure at least a few options exist if empty (on type change in create mode)
+            if (mcqOptionsContainer.childElementCount === 0 && !questionId) {
+                 addMcqOptionInput();
+                 addMcqOptionInput();
+             }
+        } else if (selectedType === 'SHORT_TEXT') {
+            shortTextSection.classList.remove('d-none');
+        } else if (selectedType === 'MEDIA') {
+            mediaSection.classList.remove('d-none');
+        }
+    }
+
+    function addMcqOptionInput(optionText = '', isCorrect = false, optionId = null) {
+        const optionIndex = mcqOptionsContainer.childElementCount;
+        const div = document.createElement('div');
+        div.classList.add('input-group', 'mb-2');
+        // Use optionId if provided (from edit mode), otherwise it's just for client-side structure
+        div.dataset.optionId = optionId || `temp_${optionIndex}`;
+
+        div.innerHTML = `
+            <div class="input-group-text">
+                <input class="form-check-input mt-0 correct-answer-checkbox" type="checkbox" value="" aria-label="Mark as correct answer" ${isCorrect ? 'checked' : ''}>
+            </div>
+            <input type="text" class="form-control mcq-option-text" value="${escapeHTML(optionText)}" placeholder="Enter answer option ${optionIndex + 1}" required>
+            <button class="btn btn-outline-danger delete-option-btn" type="button" title="Remove option">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        `;
+        mcqOptionsContainer.appendChild(div);
+    }
+
+    function handleOptionDelete(event) {
+         // If the delete button (or its icon) was clicked
+         if (event.target.closest('.delete-option-btn')) {
+             // Prevent deleting if only one option remains? Or allow? Let's allow for now.
+             event.target.closest('.input-group').remove();
+         }
+     }
+
+
+    async function fetchQuestionDetails(id) {
+        try {
+            const apiUrl = `/api/questions/${id}/`;
+            const response = await fetch(apiUrl); // GET request
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data = await response.json();
+            if (data.question) {
+                populateForm(data.question);
+                handleQuestionTypeChange(); // Ensure correct sections are shown after populating type
+                showFormContent(true);
+            } else {
+                throw new Error("Question data not found in API response.");
+            }
+        } catch (error) {
+            console.error("Failed to load question details:", error);
+            showError(`Failed to load question details. ${error.message}`);
+            showFormContent(false);
+        } finally {
+            showLoadingSpinner(false);
+        }
+    }
+
+    function populateForm(qData) {
+        questionText.value = qData.text || '';
+        questionType.value = qData.type || '';
+        questionScore.value = qData.score || 1;
+        questionDifficulty.value = qData.difficulty || 'Medium';
+        questionCategory.value = qData.category || '';
+        mediaUrlInput.value = qData.media_url || ''; // Added
+
+        // Populate MCQ options if applicable
+        mcqOptionsContainer.innerHTML = ''; // Clear existing options first
+        if (qData.type === 'MCQ' && qData.options) {
+            qData.options.forEach(option => {
+                const isCorrect = qData.correct_answer?.includes(option.id);
+                addMcqOptionInput(option.text, isCorrect, option.id);
+            });
+        }
+    }
+
+
+    async function handleFormSubmit(event) {
+        event.preventDefault();
+        clearMessages();
+        showSavingSpinner(true);
+
+        // --- Collect Common Data ---
+        const type = questionType.value;
+        const text = questionText.value;
+        const score = questionScore.value;
+        const difficulty = questionDifficulty.value;
+        const category = questionCategory.value;
+        const mediaUrl = mediaUrlInput.value; // Added
+
+        if (!text || !type) {
+            showError("Question Text and Type are required.");
+            showSavingSpinner(false);
+            return;
+        }
+
+        // --- Prepare Payload ---
+        const payload = { text, type, score, difficulty, category, media_url: mediaUrl };
+
+        // --- Collect Type-Specific Data ---
+        if (type === 'MCQ') {
+            const options = [];
+            const correctAnswers = [];
+            const optionGroups = mcqOptionsContainer.querySelectorAll('.input-group');
+
+            if (optionGroups.length < 2) { // Basic validation: need at least 2 options for MCQ
+                showError("MCQ questions require at least two options.");
+                showSavingSpinner(false);
+                return;
+            }
+            let hasCorrect = false;
+            optionGroups.forEach(group => {
+                const optionTextInput = group.querySelector('.mcq-option-text');
+                const optionText = optionTextInput.value.trim();
+                const isChecked = group.querySelector('.correct-answer-checkbox').checked;
+
+                if (optionText) { // Only include non-empty options
+                    options.push(optionText);
+                    if (isChecked) {
+                        correctAnswers.push(optionText); // Send correct texts as per API-2 expectation
+                        hasCorrect = true;
+                    }
+                }
+            });
+
+             if (options.length < 2) {
+                 showError("MCQ questions require at least two non-empty options.");
+                 showSavingSpinner(false);
+                 return;
+             }
+             if (!hasCorrect) {
+                 showError("Please mark at least one option as correct for MCQ.");
+                 showSavingSpinner(false);
+                 return;
+             }
+
+            payload.options = options;
+            payload.correct_answer_texts = correctAnswers;
+
+        } else if (type === 'SHORT_TEXT') {
+            // No specific fields needed for payload based on API-2
+        } else if (type === 'MEDIA') {
+             // Payload already includes media_url
+             // Add validation if needed (e.g., check if URL is present)
+        }
+
+        // --- Determine API Endpoint and Method ---
+        let apiUrl;
+        let apiMethod;
+        if (questionId) {
+            apiUrl = `/api/questions/${questionId}/`;
+            apiMethod = 'PUT';
+        } else {
+            apiUrl = "{% url 'quiz:question_list_create' %}"; // Use named URL for create
+            apiMethod = 'POST';
+             // TODO: How to associate with a quiz if needed?
+             // Maybe pass quiz_id in payload if coming from quiz edit page?
+             // payload.quiz_ids = ["TARGET_QUIZ_ID_IF_APPLICABLE"];
+        }
+
+        // --- Send API Request ---
+        try {
+            const csrfToken = questionForm.querySelector('[name=csrfmiddlewaretoken]').value;
+            const response = await fetch(apiUrl, {
+                method: apiMethod,
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+                body: JSON.stringify(payload)
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                const successMsg = questionId ? 'Question updated successfully!' : 'Question created successfully!';
+                showSuccess(successMsg + " Redirecting...");
+                // Redirect (e.g., to dashboard or question bank TCHR-4)
+                setTimeout(() => {
+                    window.location.href = "{% url 'teacher_interface:dashboard' %}"; // Redirect to dashboard for now
+                }, 1500);
+            } else {
+                showError(data.error || `An error occurred (${response.status})`);
+                showSavingSpinner(false);
+            }
+        } catch (error) {
+            console.error('Error saving question:', error);
+            showError('An unexpected error occurred while saving.');
+            showSavingSpinner(false);
+        }
+    }
+
+
+    // --- Helper Functions (keep from previous steps) ---
+    function showSavingSpinner(show) { /* ... */ }
+    function showError(message) { /* ... */ }
+    function showSuccess(message) { /* ... */ }
+    function clearMessages() { /* ... */ }
+    function showLoadingSpinner(show) { /* ... */ }
+    function showFormContent(show) { /* ... */ }
+    function escapeHTML(str) { /* ... */ } // Ensure this is defined
+
+     // Copy implementations for helper functions from previous step
+     function showSavingSpinner(show) {
+         saveButton.disabled = show;
+         if(show) {
+             saveSpinner.classList.remove('d-none');
+             saveButtonText.classList.add('visually-hidden');
+         } else {
+             saveSpinner.classList.add('d-none');
+             saveButtonText.classList.remove('visually-hidden');
+         }
+     }
+     function showError(message) {
+         errorMessageDiv.textContent = message;
+         errorMessageDiv.classList.remove('d-none');
+     }
+     function showSuccess(message) {
+          successMessageDiv.textContent = message;
+          successMessageDiv.classList.remove('d-none');
+     }
+     function clearMessages() {
+         errorMessageDiv.classList.add('d-none');
+         errorMessageDiv.textContent = '';
+         successMessageDiv.classList.add('d-none');
+         successMessageDiv.textContent = '';
+     }
+     function showLoadingSpinner(show) {
+         if (show) { loadingSpinner.classList.remove('d-none'); }
+         else { loadingSpinner.classList.add('d-none'); }
+     }
+     function showFormContent(show) {
+          if (show) { questionForm.classList.remove('d-none'); }
+          else { questionForm.classList.add('d-none'); }
+     }
+    function escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+</script>
+{% endblock %}

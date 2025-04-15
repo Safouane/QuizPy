@@ -1,0 +1,238 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ form_title }} - QuizPy{% endblock %}
+
+{% block content %}
+<h1>{{ form_title }}</h1>
+<hr>
+
+{# Form Submission Feedback Placeholders #}
+<div id="errorMessage" class="alert alert-danger d-none" role="alert"></div>
+<div id="successMessage" class="alert alert-success d-none" role="alert"></div>
+
+{# Loading indicator (for edit mode primarily) #}
+<div id="loadingSpinner" class="text-center my-5 d-none">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<form id="quizForm">
+    {% csrf_token %} {# Important for potential future direct POSTs, good practice #}
+
+    {# Hidden input to store quiz_id if in edit mode #}
+    <input type="hidden" id="quizId" value="{{ quiz_id|default:'' }}">
+
+    <div class="mb-3">
+        <label for="quizTitle" class="form-label">Quiz Title <span class="text-danger">*</span></label>
+        <input type="text" class="form-control" id="quizTitle" required>
+    </div>
+
+    <div class="mb-3">
+        <label for="quizDescription" class="form-label">Description</label>
+        <textarea class="form-control" id="quizDescription" rows="3"></textarea>
+    </div>
+
+    {# More fields will be added here later (e.g., linking questions, configuration TCHR-5/6) #}
+
+    <hr>
+    <div class="d-flex justify-content-end">
+        <a href="{% url 'teacher_interface:quiz_list' %}" class="btn btn-secondary me-2">Cancel</a>
+        <button type="submit" class="btn btn-primary" id="saveButton">
+             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="saveSpinner"></span>
+             <span id="saveButtonText">Save Quiz</span>
+        </button>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    const quizId = document.getElementById('quizId').value;
+    const quizForm = document.getElementById('quizForm');
+    const quizTitleInput = document.getElementById('quizTitle');
+    const quizDescriptionInput = document.getElementById('quizDescription');
+    const errorMessageDiv = document.getElementById('errorMessage');
+    const successMessageDiv = document.getElementById('successMessage');
+    const saveButton = document.getElementById('saveButton');
+    const saveButtonText = document.getElementById('saveButtonText');
+    const saveSpinner = document.getElementById('saveSpinner');
+    const loadingSpinner = document.getElementById('loadingSpinner'); // For edit mode loading
+
+    // --- Edit Mode: Fetch existing data (Not fully implemented yet) ---
+    document.addEventListener('DOMContentLoaded', () => {
+        if (quizId) {
+        // If editing, fetch quiz data and populate the form
+            console.log("Edit mode detected for quiz ID:", quizId);
+            saveButtonText.textContent = 'Update Quiz'; // Change button text
+            showLoadingSpinner(true); // Show loading spinner for the whole form area
+            fetchQuizDetails(quizId); // Call function to fetch and populate
+        } else {
+            console.log("Create mode detected");
+            showFormContent(true); // Ensure form is visible in create mode
+        }
+
+    });
+
+    // --- Function for fetching data in edit mode ---
+    async function fetchQuizDetails(id) {
+        try {
+            const apiUrl = `/api/quizzes/${id}/`; // Construct API URL
+            // No CSRF needed for GET usually, but include cookie for session check
+            const response = await fetch(apiUrl); // Default method is GET
+
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.quiz) {
+                populateForm(data.quiz); // Populate form with fetched data
+                showFormContent(true); // Show form after population
+            } else {
+                throw new Error("Quiz data not found in API response.");
+            }
+        } catch (error) {
+            console.error("Failed to load quiz details:", error);
+            showError(`Failed to load quiz details. ${error.message}`);
+            // Optionally hide the form or show a more permanent error message
+            showFormContent(false); // Hide form on load error
+        } finally {
+            showLoadingSpinner(false); // Hide loading spinner
+        }
+    }
+
+    // --- Function to populate form fields ---
+    function populateForm(quizData) {
+        quizTitleInput.value = quizData.title || '';
+        quizDescriptionInput.value = quizData.description || '';
+        // Populate other fields (like config options) when they are added to the form
+        // Example for later:
+        // document.getElementById('quizDuration').value = quizData.config?.duration || '';
+        // document.getElementById('randomizeQuestions').checked = quizData.config?.randomize_questions || false;
+    }
+
+    // --- Form Submission Logic ---
+    quizForm.addEventListener('submit', async function(event) {
+        event.preventDefault();
+        clearMessages();
+        showSavingSpinner(true);
+
+        const title = quizTitleInput.value;
+        const description = quizDescriptionInput.value;
+
+        // Basic validation
+        if (!title) {
+            showError("Quiz Title is required.");
+            showSavingSpinner(false);
+            return;
+        }
+
+        const payload = {
+            title: title,
+            description: description
+            // Add other fields (like config) as they are added to the form
+        };
+
+        // Determine API endpoint and method (Create vs Update)
+        let apiUrl;
+        let apiMethod;
+
+        if (quizId) {
+            // Update existing quiz (API-1 PUT)
+            apiUrl = `/api/quizzes/${quizId}/`; // Construct URL directly for now
+            apiMethod = 'PUT';
+        } else {
+            // Create new quiz (API-1 POST)
+            apiUrl = "{% url 'quiz:quiz_list_create' %}"; // Use named URL
+            apiMethod = 'POST';
+        }
+
+        try {
+            const csrfToken = quizForm.querySelector('[name=csrfmiddlewaretoken]').value;
+            const response = await fetch(apiUrl, {
+                method: apiMethod,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                const successMsg = quizId ? 'Quiz updated successfully!' : 'Quiz created successfully!';
+                showSuccess(successMsg + " Redirecting...");
+
+                // Redirect back to the quiz list after a short delay
+                setTimeout(() => {
+                     window.location.href = "{% url 'teacher_interface:quiz_list' %}";
+                }, 1500); // 1.5 seconds delay
+
+            } else {
+                showError(data.error || `An error occurred (${response.status})`);
+                showSavingSpinner(false);
+            }
+
+        } catch (error) {
+            console.error('Error saving quiz:', error);
+            showError('An unexpected error occurred while saving.');
+            showSavingSpinner(false);
+        }
+    });
+
+    // --- Helper Functions ---
+    function showSavingSpinner(show) {
+         saveButton.disabled = show;
+         if(show) {
+             saveSpinner.classList.remove('d-none');
+             saveButtonText.classList.add('visually-hidden'); // Hide text if desired
+         } else {
+             saveSpinner.classList.add('d-none');
+             saveButtonText.classList.remove('visually-hidden');
+         }
+    }
+
+    function showError(message) {
+        errorMessageDiv.textContent = message;
+        errorMessageDiv.classList.remove('d-none');
+    }
+
+    function showSuccess(message) {
+         successMessageDiv.textContent = message;
+         successMessageDiv.classList.remove('d-none');
+    }
+
+    function clearMessages() {
+        errorMessageDiv.classList.add('d-none');
+        errorMessageDiv.textContent = '';
+        successMessageDiv.classList.add('d-none');
+        successMessageDiv.textContent = '';
+    }
+
+    function showLoadingSpinner(show) {
+        // Controls the main loading spinner for the form area in edit mode
+        if (show) {
+            loadingSpinner.classList.remove('d-none');
+            quizForm.classList.add('d-none'); // Hide form while loading details
+        } else {
+            loadingSpinner.classList.add('d-none');
+            // quizForm.classList.remove('d-none'); // Form shown by showFormContent
+        }
+    }
+
+    function showFormContent(show) {
+        // Shows/hides the main form content area
+        if (show) {
+            quizForm.classList.remove('d-none');
+        } else {
+            quizForm.classList.add('d-none');
+        }
+    }
+
+</script>
+{% endblock %}
+
