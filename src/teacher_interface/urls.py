@@ -8,5 +8,9 @@ urlpatterns = [
     # Add other teacher UI URLs here later
     # e.g., path('teacher/quizzes/', views.quiz_list_view, name='quiz_list'),
     path('teacher/quizzes/', views.quiz_list_view, name='quiz_list'),
+    # URL for creating a new quiz
+    path('teacher/quizzes/new/', views.quiz_edit_view, name='quiz_create'),
+    # URL for editing an existing quiz (passes quiz_id to the view)
+    path('teacher/quizzes/<uuid:quiz_id>/edit/', views.quiz_edit_view, name='quiz_edit'),
 
 ]

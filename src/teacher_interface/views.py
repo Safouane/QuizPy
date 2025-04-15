@@ -1,6 +1,7 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect, get_object_or_404 # Add redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required # Standard Django login required
 from authentication.decorators import teacher_required # Our custom decorator checking is_staff
+from django.urls import reverse
 
 # Import functions to potentially fetch summary data later (from quiz app)
 # from quiz.views import ... (or better, utility functions later)
@@ -46,3 +47,29 @@ def quiz_list_view(request):
         'username': request.user.username # Pass username for context if needed
     }
     return render(request, 'teacher_interface/quiz_list.html', context)
+
+@teacher_required
+def quiz_edit_view(request, quiz_id=None):
+    """
+    Renders the quiz creation/editing form.
+    If quiz_id is provided, it's for editing (not implemented yet).
+    If quiz_id is None, it's for creating a new quiz.
+    """
+    # For now, we only handle the 'Create' case (quiz_id is None)
+    # Edit functionality (fetching quiz data via API-1 GET and passing to template)
+    # will be added later.
+    if quiz_id:
+         # Placeholder for edit logic - maybe fetch data here or let JS fetch?
+         # Let's assume JS will fetch for edit for now to keep view simple.
+         context = {
+             'quiz_id': quiz_id, # Pass ID so JS knows it's in edit mode
+             'form_title': 'Edit Quiz' # Dynamic title
+         }
+    else:
+        context = {
+            'quiz_id': None,
+            'form_title': 'Create New Quiz'
+        }
+
+    return render(request, 'teacher_interface/quiz_edit_form.html', context)
+
