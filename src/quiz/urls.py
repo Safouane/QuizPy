@@ -9,7 +9,7 @@ urlpatterns = [
 
     # Matches GET /api/quizzes/{quiz_id}/, PUT /api/quizzes/{quiz_id}/, DELETE /api/quizzes/{quiz_id}/
     # Assuming quiz_id can be integer or maybe UUID later. Using int for now.
-    path('api/quizzes/<int:quiz_id>/', views.quiz_detail_api, name='quiz_detail'),
+    path('api/quizzes/<uuid:quiz_id>/', views.quiz_detail_api, name='quiz_detail'),
 
     # Add other quiz/question related API URLs here later (e.g., for API-2)
     # path('api/questions/', views.question_list_create_api, name='question_list_create'),

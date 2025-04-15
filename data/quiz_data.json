@@ -1,45 +1,37 @@
 {
     "quizzes": [
         {
-            "id": "850e57ef-f340-4366-a807-0f6bb885842a",
-            "title": "Intro Python Quiz",
-            "description": "A very basic Python quiz.",
-            "question_ids": [
-                "41a1b537-7704-452c-a216-c665ef08d46c",
-                "682a796b-5af5-4418-97df-182f91d96c57"
-            ],
+            "id": "13261f52-94a1-4e2a-8a26-2495a3c57f02",
+            "title": "My First Quiz",
+            "description": "Basics of Python",
+            "questions": [],
             "config": {
-                "duration": 5,
-                "passing_score": 50,
+                "duration": null,
+                "pass_score": 70,
+                "presentation_mode": "all",
+                "allow_back": true,
                 "randomize_questions": false,
-                "shuffle_answers": false,
-                "presentation_mode": "all-at-once",
-                "allow_back_navigation": true
-            }
-        }
-    ],
-    "questions": [
-        {
-            "id": "41a1b537-7704-452c-a216-c665ef08d46c",
-            "text": "What keyword is used to define a function in Python?",
-            "type": "MCQ",
-            "options": [
-                "def",
-                "fun",
-                "define",
-                "function"
-            ],
-            "correct_answer": "def",
-            "score": 5,
-            "category": "Python Basics"
+                "shuffle_answers": false
+            },
+            "archived": false,
+            "versions": []
         },
         {
-            "id": "682a796b-5af5-4418-97df-182f91d96c57",
-            "text": "What does 'pip' stand for?",
-            "type": "TEXT",
-            "correct_answer": "Pip Installs Packages",
-            "score": 5,
-            "category": "Python Tools"
+            "id": "2b3c6d20-7eab-4bc0-babc-36d9fd2b2e6d",
+            "title": "My Updated Quiz Title",
+            "description": "Basics of Python 2",
+            "questions": [],
+            "config": {
+                "duration": 30,
+                "pass_score": 70,
+                "presentation_mode": "all",
+                "allow_back": true,
+                "randomize_questions": true,
+                "shuffle_answers": false
+            },
+            "archived": false,
+            "versions": []
         }
-    ]
+    ],
+    "questions": []
 }

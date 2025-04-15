@@ -14,7 +14,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'quiz_data.json')
 
-def load_quiz_data(file_path: str = DEFAULT_DATA_PATH) -> dict:
+def load_data(file_path: str = DEFAULT_DATA_PATH) -> dict:
     """
     Loads quiz and question data from a JSON file.
 
@@ -68,7 +68,7 @@ def load_quiz_data(file_path: str = DEFAULT_DATA_PATH) -> dict:
         return empty_data
 
 
-def save_quiz_data(data: dict, file_path: str = DEFAULT_DATA_PATH) -> bool:
+def save_data(data: dict, file_path: str = DEFAULT_DATA_PATH) -> bool:
     """
     Saves quiz and question data to a JSON file.
 
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     print(f"Default data path: {DEFAULT_DATA_PATH}")
 
     # 1. Load existing data (will be empty initially)
-    current_data = load_quiz_data()
+    current_data = load_data()
     print(f"\nLoaded initial data:\n{json.dumps(current_data, indent=2)}")
 
     # 2. Add some sample data (if it doesn't exist)
@@ -153,14 +153,14 @@ if __name__ == '__main__':
         )
 
         # 3. Save the updated data
-        success = save_quiz_data(current_data)
+        success = save_data(current_data)
         if success:
             print("\nSample data saved successfully.")
         else:
             print("\nFailed to save sample data.")
 
         # 4. Load again to verify
-        reloaded_data = load_quiz_data()
+        reloaded_data = load_data()
         print(f"\nReloaded data after saving:\n{json.dumps(reloaded_data, indent=2)}")
     else:
-        print("\nData file already contains quizzes. Skipping sample data addition.")cd..
+        print("\nData file already contains quizzes. Skipping sample data addition.")
