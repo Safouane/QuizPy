@@ -12,6 +12,8 @@ from core.json_storage import load_data, save_data
 # Import the decorator we created in AUTH-3
 from authentication.decorators import api_teacher_required
 
+
+
 # We will use these functions later to interact with CORE-3 JSON storage
 # from core.json_storage import load_quiz_data, save_quiz_data
 @csrf_exempt
@@ -147,3 +149,253 @@ def quiz_detail_api(request, quiz_id):
         except Exception as e:
              print(f"Error deleting quiz {quiz_id}: {e}") # Basic logging
              return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+        
+@csrf_exempt
+@api_teacher_required
+@require_http_methods(["GET", "POST"])
+def question_list_create_api(request):
+    """
+    API endpoint for listing all questions (GET) or creating a new question (POST).
+    Supports filtering by quiz_id or category via query parameters.
+    Requires teacher authentication. Uses JSON storage.
+    """
+    data = load_data()
+    all_questions = data.get('questions', [])
+
+    if request.method == 'GET':
+        # --- Filtering Logic ---
+        query_params = request.GET
+        quiz_id_filter = query_params.get('quiz_id')
+        category_filter = query_params.get('category')
+        # Add more filters like difficulty, type if needed
+
+        filtered_questions = all_questions
+        if quiz_id_filter:
+            # Filter questions linked to the specific quiz_id
+            filtered_questions = [q for q in filtered_questions if quiz_id_filter in q.get('quiz_ids', [])]
+        if category_filter:
+             # Case-insensitive category filter
+            filtered_questions = [q for q in filtered_questions if category_filter.lower() == q.get('category', '').lower()]
+
+        # If no filters, returns all questions (acting as question bank)
+        return JsonResponse({'questions': filtered_questions})
+
+    elif request.method == 'POST':
+        try:
+            request_data = json.loads(request.body)
+
+            # --- Validate Required Fields ---
+            text = request_data.get('text')
+            q_type = request_data.get('type')
+            if not text or not q_type:
+                return JsonResponse({'error': 'Question text and type are required.'}, status=400)
+
+            # Generate unique ID
+            new_question_id = str(uuid.uuid4())
+            
+            # Prepare basic question structure
+            new_question = {
+                'id': new_question_id,
+                'quiz_ids': request_data.get('quiz_ids', []), # Optional list of associated quiz IDs
+                'text': text,
+                'type': q_type,
+                'options': [],
+                'correct_answer': [],
+                'score': request_data.get('score', 1), # Default score
+                'difficulty': request_data.get('difficulty', 'Medium'),
+                'category': request_data.get('category', 'Uncategorized'),
+                'media_url': request_data.get('media_url')
+            }
+
+            # --- Handle MCQ Specific Fields ---
+            if q_type == 'MCQ':
+                options_data = request_data.get('options', [])
+                correct_answer_texts = request_data.get('correct_answer_texts', []) # Expect list of correct option TEXTS from frontend for simplicity
+
+                if not options_data or not correct_answer_texts:
+                     return JsonResponse({'error': 'MCQ questions require options and correct_answer_texts.'}, status=400)
+                
+                generated_options = []
+                correct_option_ids = []
+                for opt_text in options_data:
+                     option_id = str(uuid.uuid4())
+                     generated_options.append({"id": option_id, "text": opt_text})
+                     if opt_text in correct_answer_texts:
+                          correct_option_ids.append(option_id)
+                
+                if not correct_option_ids:
+                     return JsonResponse({'error': 'Correct answer text(s) did not match any provided options.'}, status=400)
+
+                new_question['options'] = generated_options
+                new_question['correct_answer'] = correct_option_ids
+
+            # --- Handle other types (e.g., SHORT_TEXT) - add validation/fields as needed ---
+            elif q_type == 'SHORT_TEXT':
+                # Maybe store acceptable answers or leave for manual grading
+                pass # No extra fields needed initially
+
+            # Add to list and save
+            all_questions.append(new_question)
+            data['questions'] = all_questions
+            save_data(data)
+
+            # Optional: If quiz_ids were provided, update those quizzes too
+            if new_question['quiz_ids']:
+                all_quizzes = data.get('quizzes', [])
+                updated = False
+                for quiz in all_quizzes:
+                    if quiz.get('id') in new_question['quiz_ids']:
+                        if new_question_id not in quiz.get('questions', []):
+                            quiz.setdefault('questions', []).append(new_question_id)
+                            updated = True
+                if updated:
+                     data['quizzes'] = all_quizzes
+                     save_data(data) # Save again if quizzes were updated
+
+
+            return JsonResponse({'message': 'Question created successfully.', 'question': new_question}, status=201)
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format in request body.'}, status=400)
+        except Exception as e:
+            print(f"Error creating question: {e}")
+            import traceback
+            traceback.print_exc() # Print full traceback for debugging
+            return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+        
+
+@csrf_exempt
+@api_teacher_required
+@require_http_methods(["GET", "PUT", "DELETE"])
+def question_detail_api(request, question_id):
+    """
+    API endpoint for retrieving (GET), updating (PUT), or deleting (DELETE)
+    a specific question by its ID. Requires teacher authentication. Uses JSON storage.
+    """
+    data = load_data()
+    questions = data.get('questions', [])
+    question = None
+    question_index = -1
+
+    # Find the question by ID
+    for index, q in enumerate(questions):
+        if q.get('id') == str(question_id): # Compare as strings
+            question = q
+            question_index = index
+            break
+
+    if question is None:
+        return JsonResponse({'error': f'Question with ID {question_id} not found.'}, status=404)
+
+    # --- GET Request ---
+    if request.method == 'GET':
+        return JsonResponse({'question': question})
+
+    # --- PUT Request (Update) ---
+    elif request.method == 'PUT':
+        try:
+            request_data = json.loads(request.body)
+            original_quiz_ids = set(question.get('quiz_ids', []))
+
+            # Update fields (only update fields present in request_data)
+            # Use .get() for safety if a field might be missing from the original JSON
+            if 'text' in request_data: question['text'] = request_data['text']
+            if 'type' in request_data: question['type'] = request_data['type'] # Note: Changing type might invalidate options/answers
+            if 'score' in request_data: question['score'] = request_data['score']
+            if 'difficulty' in request_data: question['difficulty'] = request_data['difficulty']
+            if 'category' in request_data: question['category'] = request_data['category']
+            if 'media_url' in request_data: question['media_url'] = request_data.get('media_url') # Allow setting to null
+            if 'quiz_ids' in request_data: question['quiz_ids'] = request_data['quiz_ids'] # Overwrite associated quizzes
+
+            # Update MCQ specific fields carefully
+            if question['type'] == 'MCQ':
+                if 'options' in request_data: # Expect list of texts
+                     options_data = request_data.get('options', [])
+                     correct_answer_texts = request_data.get('correct_answer_texts', []) # Expect correct texts again
+                     if not options_data or not correct_answer_texts:
+                          return JsonResponse({'error': 'Updating MCQ requires options and correct_answer_texts.'}, status=400)
+
+                     generated_options = []
+                     correct_option_ids = []
+                     for opt_text in options_data:
+                          option_id = str(uuid.uuid4()) # Generate new IDs on update for simplicity
+                          generated_options.append({"id": option_id, "text": opt_text})
+                          if opt_text in correct_answer_texts:
+                               correct_option_ids.append(option_id)
+
+                     if not correct_option_ids:
+                          return JsonResponse({'error': 'Correct answer text(s) did not match any provided options during update.'}, status=400)
+                     question['options'] = generated_options
+                     question['correct_answer'] = correct_option_ids
+                # Allow updating only correct answers if options are not provided? Maybe too complex for now.
+
+            # Replace the old question dict with the updated one
+            questions[question_index] = question
+            data['questions'] = questions
+            save_data(data)
+
+            # --- Update Quiz Associations ---
+            # Find quizzes removed and quizzes added
+            new_quiz_ids = set(question.get('quiz_ids', []))
+            removed_quiz_ids = original_quiz_ids - new_quiz_ids
+            added_quiz_ids = new_quiz_ids - original_quiz_ids
+            quizzes_updated = False
+            all_quizzes = data.get('quizzes', [])
+
+            for quiz in all_quizzes:
+                quiz_questions = quiz.setdefault('questions', [])
+                q_id_str = str(question_id) # Ensure comparison is consistent
+                # Remove question from quizzes it's no longer linked to
+                if quiz.get('id') in removed_quiz_ids:
+                     if q_id_str in quiz_questions:
+                          quiz_questions.remove(q_id_str)
+                          quizzes_updated = True
+                # Add question to quizzes it's newly linked to
+                if quiz.get('id') in added_quiz_ids:
+                     if q_id_str not in quiz_questions:
+                          quiz_questions.append(q_id_str)
+                          quizzes_updated = True
+
+            if quizzes_updated:
+                data['quizzes'] = all_quizzes
+                save_data(data) # Save again with updated quiz links
+
+            return JsonResponse({'message': 'Question updated successfully.', 'question': question})
+
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format in request body.'}, status=400)
+        except Exception as e:
+            print(f"Error updating question {question_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+
+    # --- DELETE Request ---
+    elif request.method == 'DELETE':
+        try:
+            # Remove the question from the main list
+            deleted_question = questions.pop(question_index)
+            data['questions'] = questions
+            save_data(data) # Save questions list
+
+            # Remove the question ID from any quizzes it was associated with
+            deleted_q_id = str(question_id)
+            quizzes_updated = False
+            all_quizzes = data.get('quizzes', [])
+            for quiz in all_quizzes:
+                 quiz_questions = quiz.get('questions', [])
+                 if deleted_q_id in quiz_questions:
+                      quiz_questions.remove(deleted_q_id)
+                      quizzes_updated = True
+
+            if quizzes_updated:
+                data['quizzes'] = all_quizzes
+                save_data(data) # Save updated quizzes list
+
+            return JsonResponse({'message': f'Question (ID: {question_id}) deleted successfully.'})
+        except Exception as e:
+            print(f"Error deleting question {question_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+        
