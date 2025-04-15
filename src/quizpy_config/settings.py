@@ -65,6 +65,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'authentication',
     'quiz.apps.QuizConfig',
+    'teacher_interface.apps.TeacherInterfaceConfig', 
+
 
 ]
 

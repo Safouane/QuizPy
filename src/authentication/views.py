@@ -7,10 +7,11 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt # For basic API usage without frontend form CSRF token initially
 from django.views.decorators.http import require_POST
 from django.shortcuts import render, redirect
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required # Standard Django login required
+
 
 # Import the decorator we created in AUTH-3
-from authentication.decorators import api_teacher_required  
+from authentication.decorators import api_teacher_required # Our custom decorator checking is_staff
 
 @csrf_exempt
 @require_POST
@@ -75,6 +76,5 @@ def login_page_view(request):
     if request.user.is_authenticated and request.user.is_staff:
         # --- MAKE SURE THIS LINE USES A VALID REDIRECT ---
         # --- IT SHOULD BE redirect('core:index') or redirect('/') ---
-        # --- NOT redirect('teacher:dashboard') ---
-        return redirect('/') # Example using home page URL name
+        return redirect('teacher_interface:dashboard') # Redirect to teacher dashboard
     return render(request, 'authentication/login.html')
