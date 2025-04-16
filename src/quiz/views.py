@@ -162,6 +162,14 @@ def quiz_detail_api(request, quiz_id):
                 allow_back = new_config.get('allow_back', current_config.get('allow_back', True))
                 current_config['allow_back'] = bool(allow_back) # Ensure boolean
 
+                # Randomize Question Order (Boolean)
+                randomize_questions = new_config.get('randomize_questions', current_config.get('randomize_questions', False)) # Default false
+                current_config['randomize_questions'] = bool(randomize_questions) # Ensure boolean
+
+                # Shuffle Answer Options (Boolean)
+                shuffle_answers = new_config.get('shuffle_answers', current_config.get('shuffle_answers', False)) # Default false
+                current_config['shuffle_answers'] = bool(shuffle_answers) # Ensure boolean
+                
                 # Assign the updated config back
                 quiz['config'] = current_config
 
