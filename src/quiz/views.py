@@ -1,13 +1,12 @@
 from django.shortcuts import render
-
-# Create your views here.
 from django.http import JsonResponse
 from django.views.decorators.http import require_http_methods
 from django.views.decorators.csrf import csrf_exempt # Keep using exempt for now, manage CSRF properly with frontend later
-
 import json
 import uuid
 from core.json_storage import load_data, save_data
+from django.http import HttpResponse
+
 
 # Import the decorator we created in AUTH-3
 from authentication.decorators import api_teacher_required
@@ -488,3 +487,198 @@ def question_detail_api(request, question_id):
             traceback.print_exc()
             return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
         
+
+@api_teacher_required
+@require_http_methods(["GET"]) # Export is typically a GET request
+def quiz_export_api(request, quiz_id):
+    """
+    API endpoint to export a single quiz and its associated questions as JSON.
+    """
+    try:
+        data = load_data()
+        quizzes = data.get('quizzes', [])
+        all_questions = data.get('questions', [])
+        quiz_to_export = None
+
+        # Find the quiz
+        for q in quizzes:
+            if str(q.get('id')) == str(quiz_id): # Compare as strings
+                quiz_to_export = q
+                break
+
+        if quiz_to_export is None:
+            return JsonResponse({'error': f'Quiz with ID {quiz_id} not found.'}, status=404)
+
+        # Find associated questions
+        question_ids_in_quiz = set(quiz_to_export.get('questions', []))
+        associated_questions = [
+            q for q in all_questions if str(q.get('id')) in question_ids_in_quiz
+        ]
+
+        # Structure the export data
+        export_data = {
+            "quiz": quiz_to_export,
+            "questions": associated_questions
+        }
+
+        # Prepare the file response
+        json_data = json.dumps(export_data, indent=2) # Pretty print JSON
+        # Create a safe filename (e.g., replace spaces)
+        filename_title = quiz_to_export.get('title', 'quiz').replace(' ', '_')
+        filename = f"quiz_{filename_title}_{quiz_id}.json"
+
+        response = HttpResponse(json_data, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"' # Force download
+        response['Access-Control-Expose-Headers'] = 'Content-Disposition' # Important for JS if needed later
+
+        print(f"DEBUG: Exporting quiz ID {quiz_id} as {filename}") # Logging
+        return response
+
+    except Exception as e:
+        print(f"Error exporting quiz {quiz_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'An unexpected error occurred during export: {str(e)}'}, status=500)
+    
+@csrf_exempt # Use proper CSRF handling if form submitted directly later
+@api_teacher_required
+@require_http_methods(["POST"])
+def quiz_import_api(request):
+    """
+    API endpoint to import a quiz and its questions from an uploaded JSON file.
+    Generates new IDs for the imported items.
+    """
+    try:
+        # Check if file is present
+        if 'quizFile' not in request.FILES:
+            return JsonResponse({'error': 'No quiz file provided.'}, status=400)
+
+        uploaded_file = request.FILES['quizFile']
+
+        # Basic validation: Check file extension (allow .json)
+        if not uploaded_file.name.lower().endswith('.json'):
+            return JsonResponse({'error': 'Invalid file type. Only .json files are accepted.'}, status=400)
+
+        # Read and parse JSON content
+        try:
+            import_data = json.load(uploaded_file) # Reads directly from file stream
+        except json.JSONDecodeError:
+            return JsonResponse({'error': 'Invalid JSON format in the uploaded file.'}, status=400)
+        except Exception as e:
+             return JsonResponse({'error': f'Error reading file content: {str(e)}'}, status=400)
+
+
+        # --- Validate and Process Import Data ---
+        imported_quiz_data = import_data.get("quiz")
+        imported_questions_data = import_data.get("questions", [])
+
+        if not imported_quiz_data or not isinstance(imported_quiz_data, dict):
+            return JsonResponse({'error': 'Invalid JSON structure: Missing or invalid "quiz" object.'}, status=400)
+        if not isinstance(imported_questions_data, list):
+             return JsonResponse({'error': 'Invalid JSON structure: "questions" must be a list.'}, status=400)
+
+        # Load existing data
+        data = load_data()
+        all_quizzes = data.get('quizzes', [])
+        all_questions = data.get('questions', [])
+
+        # --- Process Questions First ---
+        newly_created_question_ids = []
+        old_to_new_question_id_map = {}
+        for q_data in imported_questions_data:
+            if not isinstance(q_data, dict) or not q_data.get('text') or not q_data.get('type'):
+                 print(f"Skipping invalid question data: {q_data}") # Log skip
+                 continue # Skip invalid question entries
+
+            old_q_id = q_data.get('id') # Get original ID for mapping
+            new_q = q_data.copy() # Create a copy to modify
+
+            # Generate NEW IDs
+            new_q_id = str(uuid.uuid4())
+            new_q['id'] = new_q_id
+            if old_q_id: # Store mapping if original ID existed
+                old_to_new_question_id_map[old_q_id] = new_q_id
+
+            # Generate NEW Option IDs if MCQ
+            if new_q.get('type') == 'MCQ' and isinstance(new_q.get('options'), list):
+                 new_options = []
+                 old_to_new_option_id_map = {}
+                 correct_answer_texts = [] # Need to rebuild correct answers based on new IDs
+
+                 # Find correct texts first using old IDs
+                 old_correct_option_ids = set(new_q.get('correct_answer', []))
+                 original_options = new_q.get('options', [])
+                 for opt in original_options:
+                     if isinstance(opt, dict) and opt.get('id') in old_correct_option_ids:
+                         correct_answer_texts.append(opt.get('text'))
+
+                 # Generate new options and map correct answers
+                 new_correct_answer_ids = []
+                 for opt in original_options:
+                      if not isinstance(opt, dict) or 'text' not in opt: continue # Skip invalid option
+                      new_opt_id = str(uuid.uuid4())
+                      new_options.append({'id': new_opt_id, 'text': opt['text']})
+                      # If this option's text was marked correct, use the new ID
+                      if opt.get('text') in correct_answer_texts:
+                          new_correct_answer_ids.append(new_opt_id)
+
+                 new_q['options'] = new_options
+                 new_q['correct_answer'] = new_correct_answer_ids
+            else:
+                 # Clear options/answers if not MCQ
+                 new_q['options'] = []
+                 new_q['correct_answer'] = []
+
+
+            # Add processed question to main list
+            all_questions.append(new_q)
+            newly_created_question_ids.append(new_q_id) # Keep track for the quiz
+
+        # --- Process Quiz ---
+        new_quiz = imported_quiz_data.copy()
+        new_quiz_id = str(uuid.uuid4())
+        new_quiz['id'] = new_quiz_id
+
+        # Update quiz's question list with NEW question IDs
+        # Map old IDs from imported quiz's 'questions' list to new IDs
+        old_question_ids_in_quiz = imported_quiz_data.get('questions', [])
+        new_question_ids_for_quiz = [
+            old_to_new_question_id_map[old_id]
+            for old_id in old_question_ids_in_quiz
+            if old_id in old_to_new_question_id_map # Only include if the question was valid and processed
+        ]
+        # If no 'questions' key in import, use all newly created ones
+        if not old_question_ids_in_quiz and newly_created_question_ids:
+             new_question_ids_for_quiz = newly_created_question_ids
+
+        new_quiz['questions'] = new_question_ids_for_quiz
+
+        # Add basic validation for title
+        if not new_quiz.get('title'):
+            new_quiz['title'] = "Imported Quiz" # Default title
+
+        # Reset potentially sensitive/runtime data? (e.g., versions)
+        new_quiz['versions'] = []
+        new_quiz['archived'] = False # Import as active
+
+        # Add processed quiz to main list
+        all_quizzes.append(new_quiz)
+
+        # --- Save Updated Data ---
+        data['quizzes'] = all_quizzes
+        data['questions'] = all_questions
+        save_data(data)
+
+        print(f"DEBUG: Imported quiz '{new_quiz['title']}' (New ID: {new_quiz_id}) with {len(new_question_ids_for_quiz)} questions.") # Logging
+        return JsonResponse({
+            'message': 'Quiz imported successfully!',
+            'new_quiz_id': new_quiz_id,
+            'new_quiz_title': new_quiz['title'],
+            'questions_imported_count': len(newly_created_question_ids)
+             }, status=201)
+
+    except Exception as e:
+        print(f"Error importing quiz: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'An unexpected error occurred during import: {str(e)}'}, status=500)
