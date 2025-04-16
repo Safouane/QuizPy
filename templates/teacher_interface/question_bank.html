@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Question Bank - QuizPy{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Question Bank</h1>
+    <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-success">
+        <i class="bi bi-plus-circle"></i> Add New Question
+    </a>
+</div>
+
+{# TODO: Add filtering controls (e.g., by category, type, difficulty) #}
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input type="text" id="categoryFilter" class="form-control" placeholder="Filter by Category...">
+    </div>
+     <div class="col-md-2">
+         <button id="filterBtn" class="btn btn-outline-secondary">Filter</button>
+     </div>
+</div>
+
+
+{# Loading spinner #}
+<div id="loadingSpinner" class="text-center my-5">
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    <p>Loading questions...</p>
+</div>
+
+{# Error message placeholder #}
+<div id="errorMessage" class="alert alert-danger d-none" role="alert"></div>
+
+{# Table to display questions - initially hidden #}
+<div id="questionTableContainer" class="table-responsive d-none">
+    <table class="table table-striped table-hover align-middle">
+        <thead>
+            <tr>
+                <th scope="col" style="width: 40%;">Question Text Preview</th>
+                <th scope="col">Type</th>
+                <th scope="col">Category</th>
+                <th scope="col">Difficulty</th>
+                <th scope="col" class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="questionTableBody">
+            {# Question rows will be inserted here by JavaScript #}
+        </tbody>
+    </table>
+</div>
+
+ {# Placeholder for when no questions are found #}
+<div id="noQuestionsMessage" class="alert alert-info d-none" role="alert">
+    No questions found in the bank. <a href="{% url 'teacher_interface:question_create' %}" class="alert-link">Add your first question!</a>
+</div>
+
+{# Delete Confirmation Modal (Can reuse structure from TCHR-2 or create specific one) #}
+<div class="modal fade" id="deleteQuestionConfirmModal" tabindex="-1" aria-labelledby="deleteQuestionConfirmModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="deleteQuestionConfirmModalLabel">Confirm Deletion</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        Are you sure you want to delete this question?
+        <blockquote class="mt-2 small text-muted" id="questionTextToDeletePreview"></blockquote>
+        <small class="text-danger d-block">This action cannot be undone and will remove the question from all quizzes it belongs to.</small>
+        <div id="deleteQuestionError" class="alert alert-danger mt-3 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmDeleteQuestionBtn">
+             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="deleteQuestionSpinner"></span>
+            Delete Question
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    // --- DOM Elements ---
+    const tableBody = document.getElementById('questionTableBody');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const errorMessage = document.getElementById('errorMessage');
+    const tableContainer = document.getElementById('questionTableContainer');
+    const noQuestionsMessage = document.getElementById('noQuestionsMessage');
+    const categoryFilterInput = document.getElementById('categoryFilter');
+    const filterBtn = document.getElementById('filterBtn');
+
+    // --- Modal Elements ---
+    let questionIdToDelete = null;
+    const deleteModalElement = document.getElementById('deleteQuestionConfirmModal');
+    const deleteModal = new bootstrap.Modal(deleteModalElement);
+    const questionPreviewSpan = document.getElementById('questionTextToDeletePreview');
+    const confirmDeleteBtn = document.getElementById('confirmDeleteQuestionBtn');
+    const deleteErrorDiv = document.getElementById('deleteQuestionError');
+    const deleteSpinner = document.getElementById('deleteQuestionSpinner');
+
+    // --- Event Listeners ---
+    document.addEventListener('DOMContentLoaded', () => fetchQuestions());
+    filterBtn.addEventListener('click', () => fetchQuestions()); // Refetch on filter click
+    categoryFilterInput.addEventListener('keyup', function(event) { // Optional: filter on enter key
+         if (event.key === 'Enter') { fetchQuestions(); }
+     });
+
+     // --- Delete Listener (Delegation) ---
+     document.addEventListener('click', function(event) {
+        const deleteButton = event.target.closest('.delete-question-btn');
+        if (deleteButton) {
+            questionIdToDelete = deleteButton.dataset.questionId;
+            const questionTextPreview = deleteButton.dataset.questionTextPreview;
+            questionPreviewSpan.textContent = questionTextPreview.length > 100 ? questionTextPreview.substring(0, 100) + '...' : questionTextPreview;
+            deleteErrorDiv.classList.add('d-none');
+            deleteErrorDiv.textContent = '';
+            enableDeleteButton(true);
+            deleteModal.show();
+        }
+     });
+
+     // --- Modal Confirm Delete Listener ---
+     confirmDeleteBtn.addEventListener('click', async function() {
+         if (!questionIdToDelete) return;
+         enableDeleteButton(false);
+         try {
+             const csrfToken = getCookie('csrftoken'); // Use helper function
+             const apiUrl = `/api/questions/${questionIdToDelete}/`;
+             const response = await fetch(apiUrl, {
+                 method: 'DELETE',
+                 headers: { 'X-CSRFToken': csrfToken }
+             });
+             if (response.ok) {
+                 deleteModal.hide();
+                 fetchQuestions(); // Refresh the list after successful delete
+             } else {
+                 const data = await response.json();
+                 deleteErrorDiv.textContent = data.error || `Failed to delete question (status: ${response.status}).`;
+                 deleteErrorDiv.classList.remove('d-none');
+                 enableDeleteButton(true);
+             }
+         } catch (error) {
+             console.error('Error deleting question:', error);
+             deleteErrorDiv.textContent = 'An unexpected error occurred.';
+             deleteErrorDiv.classList.remove('d-none');
+             enableDeleteButton(true);
+         } finally {
+             questionIdToDelete = null;
+         }
+     });
+
+
+    // --- Core Function to Fetch Questions ---
+    async function fetchQuestions() {
+        showLoading(true);
+        const categoryFilter = categoryFilterInput.value.trim();
+        let apiUrl = "{% url 'quiz:question_list_create' %}"; // Base API URL (API-2 GET)
+
+        // Add query parameters for filtering
+        const queryParams = new URLSearchParams();
+        if (categoryFilter) {
+             queryParams.append('category', categoryFilter);
+        }
+        // Add more filters here later (type, difficulty)
+        if (queryParams.toString()) {
+             apiUrl += `?${queryParams.toString()}`;
+        }
+
+
+        try {
+            const response = await fetch(apiUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data = await response.json();
+            renderQuestionTable(data.questions || []);
+
+        } catch (error) {
+            console.error('Error fetching questions:', error);
+            showError('Error loading questions. Please try again later.');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // --- Function to Render Table ---
+    function renderQuestionTable(questions) {
+        tableBody.innerHTML = ''; // Clear previous rows
+        if (questions.length === 0) {
+            tableContainer.classList.add('d-none');
+            noQuestionsMessage.classList.remove('d-none');
+        } else {
+            noQuestionsMessage.classList.add('d-none');
+            questions.forEach(q => {
+                const row = tableBody.insertRow();
+                const textPreview = q.text?.length > 80 ? q.text.substring(0, 80) + '...' : q.text;
+                row.innerHTML = `
+                    <td>${escapeHTML(textPreview || 'N/A')}</td>
+                    <td><span class="badge bg-info">${escapeHTML(q.type || 'N/A')}</span></td>
+                    <td>${escapeHTML(q.category || '-')}</td>
+                    <td>${escapeHTML(q.difficulty || '-')}</td>
+                    <td class="text-end">
+                        <a href="/teacher/questions/${q.id}/edit/" class="btn btn-sm btn-primary me-1" title="Edit"><i class="bi bi-pencil-square"></i></a>
+                        <button class="btn btn-sm btn-danger delete-question-btn"
+                                data-question-id="${q.id}"
+                                data-question-text-preview="${escapeHTML(q.text || 'N/A')}"
+                                title="Delete">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+            });
+            tableContainer.classList.remove('d-none');
+        }
+    }
+
+    // --- Helper Functions ---
+     function showLoading(isLoading) {
+          if (isLoading) {
+               loadingSpinner.classList.remove('d-none');
+               errorMessage.classList.add('d-none');
+               tableContainer.classList.add('d-none');
+               noQuestionsMessage.classList.add('d-none');
+          } else {
+               loadingSpinner.classList.add('d-none');
+          }
+     }
+     function showError(message) {
+          errorMessage.textContent = message;
+          errorMessage.classList.remove('d-none');
+          tableContainer.classList.add('d-none');
+          noQuestionsMessage.classList.add('d-none');
+     }
+     function enableDeleteButton(enable) { /* ... as defined before ... */ }
+     function getCookie(name) { /* ... as defined before ... */ }
+     function escapeHTML(str) { /* ... as defined before ... */ }
+
+     // Copy implementations
+     function enableDeleteButton(enable) {
+         confirmDeleteBtn.disabled = !enable;
+         if (!enable) { deleteSpinner.classList.remove('d-none'); }
+         else { deleteSpinner.classList.add('d-none'); }
+     }
+     function getCookie(name) {
+         let cookieValue = null;
+         if (document.cookie && document.cookie !== '') {
+             const cookies = document.cookie.split(';');
+             for (let i = 0; i < cookies.length; i++) {
+                 const cookie = cookies[i].trim();
+                 if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                     cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                     break;
+                 }
+             }
+         }
+         return cookieValue;
+     }
+      function escapeHTML(str) {
+         if (str === null || str === undefined) return '';
+         const div = document.createElement('div');
+         div.appendChild(document.createTextNode(str));
+         return div.innerHTML;
+     }
+
+</script>
+{% endblock %}

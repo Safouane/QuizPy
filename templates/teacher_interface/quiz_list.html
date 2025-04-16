@@ -12,6 +12,31 @@
     </a>
 </div>
 
+{# ... after create button div ... #}
+
+<hr>
+{# --- Import Section --- #}
+<div class="row mb-4 align-items-end">
+    <div class="col-md-6">
+        <label for="quizImportFile" class="form-label">Import Quiz from JSON File</label>
+        <input class="form-control" type="file" id="quizImportFile" accept=".json">
+        <small class="text-muted">Upload a previously exported QuizPy JSON file.</small>
+    </div>
+    <div class="col-md-3">
+         <button type="button" class="btn btn-info w-100" id="importQuizBtn" disabled>
+             <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="importSpinner"></span>
+             Upload and Import
+         </button>
+    </div>
+     {# Import Feedback Placeholders #}
+     <div class="col-12 mt-2">
+        <div id="importErrorMessage" class="alert alert-danger d-none mb-0" role="alert"></div>
+        <div id="importSuccessMessage" class="alert alert-success d-none mb-0" role="alert"></div>
+     </div>
+</div>
+<hr>
+{# --- End Import Section --- #}
+
 {# Optional: Add filtering/search controls here later #}
 
 {# Loading spinner while data is fetched #}
@@ -92,8 +117,13 @@
 
 {% endblock %}
 
+
+
+
 {% block extra_scripts %}
 {{ block.super }} {# Include parent block scripts if any #}
+
+
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         fetchQuizzes();
@@ -153,6 +183,13 @@
                                     title="Delete">
                                 <i class="bi bi-trash"></i>
                             </button>
+
+                            {# --- EXPORT BUTTON --- #}
+                                <a href="/api/quizzes/${quiz.id}/export/" class="btn btn-sm btn-outline-secondary ms-1" title="Export as JSON" download>
+                                    <i class="bi bi-download"></i>
+                                </a>
+                            {# --- END EXPORT BUTTON --- #}
+
                         </td>
                     `;
                 });
@@ -183,6 +220,14 @@ const quizNameToDeleteSpan = document.getElementById('quizNameToDelete');
 const confirmDeleteBtn = document.getElementById('confirmDeleteBtn');
 const deleteErrorDiv = document.getElementById('deleteError');
 const deleteSpinner = document.getElementById('deleteSpinner');
+
+
+// --- Import Elements ---
+const importFileInput = document.getElementById('quizImportFile');
+const importQuizBtn = document.getElementById('importQuizBtn');
+const importSpinner = document.getElementById('importSpinner');
+const importErrorMessage = document.getElementById('importErrorMessage');
+const importSuccessMessage = document.getElementById('importSuccessMessage');
 
 
 // --- Event Listener for Delete Buttons (using delegation) ---
@@ -259,15 +304,100 @@ confirmDeleteBtn.addEventListener('click', async function() {
     }
 });
 
- // --- Helper function to enable/disable delete button and show spinner ---
- function enableDeleteButton(enable) {
-     confirmDeleteBtn.disabled = !enable;
-     if (!enable) {
-         deleteSpinner.classList.remove('d-none');
+// Enable button only when a file is selected
+importFileInput.addEventListener('change', () => {
+    importQuizBtn.disabled = !importFileInput.files || importFileInput.files.length === 0;
+    clearImportMessages(); // Clear messages if file changes
+});
+
+
+// --- Import Handler Function ---
+async function handleQuizImport() {
+    clearImportMessages();
+    const file = importFileInput.files[0];
+    if (!file) {
+        showImportError("Please select a JSON file to import.");
+        return;
+    }
+    if (!file.name.toLowerCase().endsWith('.json')) {
+         showImportError("Invalid file type. Only .json files are accepted.");
+         return;
+    }
+
+
+    setImportButtonState(true); // Show spinner, disable button
+
+    const formData = new FormData();
+    formData.append('quizFile', file); // 'quizFile' must match request.FILES key in view
+
+    const apiUrl = "{% url 'quiz:quiz_import' %}"; // Named URL for import API
+    const csrfToken = getCookie('csrftoken'); // Use helper
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': csrfToken
+                // 'Content-Type' is set automatically by browser for FormData
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (response.ok) { // Status 201 Created expected
+            showImportSuccess(`Successfully imported quiz: "${data.new_quiz_title || 'N/A'}". Refreshing list...`);
+            importFileInput.value = null; // Clear file input
+            importQuizBtn.disabled = true; // Disable button again
+            // Refresh the quiz list after a short delay
+            setTimeout(fetchQuizzes, 1500); // Call the existing function to reload table
+        } else {
+            showImportError(data.error || `Import failed (status: ${response.status}).`);
+        }
+
+    } catch (error) {
+        console.error("Error importing quiz:", error);
+        showImportError("An unexpected error occurred during import.");
+    } finally {
+        setImportButtonState(false); // Hide spinner, re-enable button (unless successful)
+    }
+}
+
+importQuizBtn.addEventListener('click', handleQuizImport);
+
+// --- Import Helper Functions ---
+function clearImportMessages() {
+    importErrorMessage.classList.add('d-none');
+    importErrorMessage.textContent = '';
+    importSuccessMessage.classList.add('d-none');
+    importSuccessMessage.textContent = '';
+}
+ function showImportError(message) {
+    importErrorMessage.textContent = message;
+    importErrorMessage.classList.remove('d-none');
+}
+  function showImportSuccess(message) {
+    importSuccessMessage.textContent = message;
+    importSuccessMessage.classList.remove('d-none');
+}
+ function setImportButtonState(isImporting) {
+     importQuizBtn.disabled = isImporting;
+     if (isImporting) {
+         importSpinner.classList.remove('d-none');
      } else {
-         deleteSpinner.classList.add('d-none');
+         importSpinner.classList.add('d-none');
      }
  }
+
+// --- Helper function to enable/disable delete button and show spinner ---
+function enableDeleteButton(enable) {
+    confirmDeleteBtn.disabled = !enable;
+    if (!enable) {
+        deleteSpinner.classList.remove('d-none');
+    } else {
+        deleteSpinner.classList.add('d-none');
+    }
+}
 
  // --- Helper function to get CSRF token from cookies (if not in a form) ---
  // (Needed if not using {% csrf_token %} directly in JS, which isn't ideal)

@@ -6,6 +6,7 @@ import json
 import uuid
 from core.json_storage import load_data, save_data
 from django.http import HttpResponse
+import random
 
 
 # Import the decorator we created in AUTH-3
@@ -33,6 +34,8 @@ def quiz_list_create_api(request):
 
     elif request.method == 'POST':
         try:
+            import random # Add import
+            import string # Add import
             # Get data from request body
             request_data = json.loads(request.body)
             title = request_data.get('title')
@@ -41,6 +44,14 @@ def quiz_list_create_api(request):
             if not title:
                 return JsonResponse({'error': 'Quiz title is required.'}, status=400)
 
+            def generate_quiz_key(length=6):
+                # Simple key generator (letters and digits) - make more robust if needed
+                characters = string.ascii_uppercase + string.digits
+                return ''.join(random.choice(characters) for i in range(length))
+
+            # Generate a unique key (add checks later if collision is a concern)
+            new_quiz_key = generate_quiz_key()
+            
             # Create new quiz object
             new_quiz_id = str(uuid.uuid4()) # Generate a unique ID
             new_quiz = {
@@ -57,6 +68,7 @@ def quiz_list_create_api(request):
                     'randomize_questions': False,
                     'shuffle_answers': False
                 },
+                'access_key': new_quiz_key,
                 'archived': False,
                 'versions': [] # For TCHR-8 later
                 # Add created_at, updated_at timestamps if desired
@@ -109,7 +121,7 @@ def quiz_detail_api(request, quiz_id):
         try:
             request_data = json.loads(request.body)
 
-            # Update allowed fields (add more fields as needed)
+
             # Update allowed fields
             if 'title' in request_data: quiz['title'] = request_data['title']
             if 'description' in request_data: quiz['description'] = request_data.get('description', quiz.get('description', ''))
@@ -682,3 +694,120 @@ def quiz_import_api(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'An unexpected error occurred during import: {str(e)}'}, status=500)
+    
+
+@csrf_exempt # If called via JS POST potentially, otherwise maybe GET
+@require_http_methods(["POST"]) # Let's use POST to receive the key potentially alongside student info later
+def quiz_access_api(request):
+    """
+    API endpoint for students to access a quiz using a key.
+    Validates the key, fetches quiz and question data, applies randomization,
+    and returns the prepared quiz structure for the student to take.
+    """
+    try:
+        request_data = json.loads(request.body)
+        quiz_key = request_data.get('quiz_key')
+
+        if not quiz_key:
+            return JsonResponse({'error': 'Quiz key is required.'}, status=400)
+
+        print(f"DEBUG: Quiz access requested with key: {quiz_key}") # Log
+
+        data = load_data()
+        all_quizzes = data.get('quizzes', [])
+        all_questions = data.get('questions', [])
+        target_quiz = None
+        quiz_metadata = None
+
+        # --- Find Quiz by Access Key ---
+        for quiz in all_quizzes:
+            # Case-insensitive key matching recommended
+            if quiz.get('access_key') and quiz.get('access_key').upper() == quiz_key.upper():
+                 # Found the quiz, check if it's active
+                 if quiz.get('archived', False):
+                      print(f"DEBUG: Quiz found for key {quiz_key} but is archived.")
+                      return JsonResponse({'error': 'This quiz is currently inactive.'}, status=403) # Forbidden
+                 target_quiz = quiz
+                 break # Stop searching once found
+
+        if target_quiz is None:
+            print(f"DEBUG: Invalid quiz key provided: {quiz_key}")
+            return JsonResponse({'error': 'Invalid quiz key.'}, status=404) # Not Found
+
+        print(f"DEBUG: Found active quiz '{target_quiz.get('title')}' (ID: {target_quiz.get('id')}) for key {quiz_key}")
+
+        # --- Fetch Associated Questions ---
+        question_ids_in_quiz = set(target_quiz.get('questions', []))
+        quiz_questions = [
+            q for q in all_questions if str(q.get('id')) in question_ids_in_quiz
+        ]
+
+        if not quiz_questions:
+             print(f"DEBUG: Quiz {target_quiz.get('id')} has no associated questions.")
+             return JsonResponse({'error': 'This quiz contains no questions.'}, status=400) # Bad Request
+
+        print(f"DEBUG: Found {len(quiz_questions)} questions for quiz {target_quiz.get('id')}")
+
+        # --- Apply Randomization (Based on TCHR-6 config) ---
+        quiz_config = target_quiz.get('config', {})
+
+        # 1. Randomize Question Order
+        if quiz_config.get('randomize_questions', False):
+            print("DEBUG: Randomizing question order.")
+            random.shuffle(quiz_questions)
+
+        # 2. Shuffle Answer Options (for MCQs)
+        if quiz_config.get('shuffle_answers', False):
+            print("DEBUG: Shuffling MCQ answer options.")
+            for question in quiz_questions:
+                if question.get('type') == 'MCQ' and isinstance(question.get('options'), list):
+                     # Important: Shuffle a *copy* if you don't want to affect the stored data
+                     # For now, let's shuffle in place just for this student's attempt
+                     random.shuffle(question['options'])
+                     # NOTE: Shuffling options means the stored `correct_answer` (which holds option IDs)
+                     # is now potentially incorrect *relative to the shuffled order*.
+                     # The grading logic (API-4) MUST compare student's selected option ID(s)
+                     # against the original `correct_answer` list, NOT based on the shuffled index.
+
+        # --- Prepare Data Payload for Student ---
+        # Remove sensitive/internal data before sending
+        prepared_quiz = {
+            'id': target_quiz.get('id'),
+            'title': target_quiz.get('title'),
+            'description': target_quiz.get('description'),
+            'config': { # Send only relevant config for student UI
+                'duration': quiz_config.get('duration'),
+                'presentation_mode': quiz_config.get('presentation_mode', 'all'),
+                'allow_back': quiz_config.get('allow_back', True),
+            },
+            'questions': [] # Prepare questions below
+        }
+
+        for q in quiz_questions:
+             prepared_q = {
+                 'id': q.get('id'),
+                 'text': q.get('text'),
+                 'type': q.get('type'),
+                 'score': q.get('score', 1), # Send score for potential display? Optional.
+                 'media_url': q.get('media_url'), # Send media URL if present
+                 'options': [] # Prepare options below (only for MCQ)
+             }
+             # Send only option ID and Text, DO NOT SEND correct_answer IDs
+             if q.get('type') == 'MCQ' and isinstance(q.get('options'), list):
+                  prepared_q['options'] = [
+                      {'id': opt.get('id'), 'text': opt.get('text')}
+                      for opt in q.get('options', []) if isinstance(opt, dict) # Basic safety check
+                  ]
+             prepared_quiz['questions'].append(prepared_q)
+
+        print(f"DEBUG: Returning prepared quiz data for student. Quiz ID: {prepared_quiz['id']}, Question Count: {len(prepared_quiz['questions'])}")
+        return JsonResponse(prepared_quiz)
+
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid request format.'}, status=400)
+    except Exception as e:
+        print(f"Error accessing quiz with key: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)

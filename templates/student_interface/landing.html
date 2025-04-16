@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Take Quiz - QuizPy{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-8 col-lg-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">Start Your Quiz</h4>
+            </div>
+            <div class="card-body">
+                <p class="card-text text-muted mb-4">Please enter your details and the quiz key provided by your teacher.</p>
+
+                {# Form Submission Feedback Placeholders #}
+                <div id="errorMessage" class="alert alert-danger d-none" role="alert"></div>
+
+                <form id="startQuizForm">
+                    {# Don't need CSRF here if submitting via JS to API that doesn't require it for students #}
+
+                    {# Student Information #}
+                    <h5>Your Information</h5>
+                    <div class="row g-3 mb-3">
+                        <div class="col-sm-6">
+                            <label for="studentName" class="form-label">Full Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="studentName" required>
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="studentClass" class="form-label">Class / Group</label>
+                            <input type="text" class="form-control" id="studentClass">
+                        </div>
+                        <div class="col-sm-6">
+                            <label for="studentId" class="form-label">ID / Number</label>
+                            <input type="text" class="form-control" id="studentId">
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    {# Quiz Access #}
+                    <h5>Quiz Access</h5>
+                     <div class="mb-3">
+                        <label for="quizKey" class="form-label">Quiz Key <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-key-fill"></i></span>
+                            <input type="text" class="form-control" id="quizKey" placeholder="Enter quiz key" required aria-label="Quiz Key">
+                        </div>
+                     </div>
+
+                    <div class="d-grid mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg" id="startQuizBtn">
+                            <span class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true" id="startSpinner"></span>
+                            Start Quiz
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+{# Add Bootstrap Icons if not already in base.html block #}
+{# <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css"> #}
+<script>
+    const startQuizForm = document.getElementById('startQuizForm');
+    const studentNameInput = document.getElementById('studentName');
+    const studentClassInput = document.getElementById('studentClass');
+    const studentIdInput = document.getElementById('studentId');
+    const quizKeyInput = document.getElementById('quizKey');
+    const errorMessageDiv = document.getElementById('errorMessage');
+    const startQuizBtn = document.getElementById('startQuizBtn');
+    const startSpinner = document.getElementById('startSpinner');
+
+    startQuizForm.addEventListener('submit', async function(event) { // Make async
+        event.preventDefault();
+        clearMessages();
+        setButtonState(true);
+
+        const studentInfo = {
+            name: studentNameInput.value.trim(),
+            class: studentClassInput.value.trim(),
+            id: studentIdInput.value.trim()
+        };
+        const quizKey = quizKeyInput.value.trim();
+
+        if (!studentInfo.name || !quizKey) {
+            showError('Please enter your Full Name and the Quiz Key.');
+            setButtonState(false);
+            return;
+        }
+
+        // --- Call API-3 ---
+        const apiUrl = "{% url 'quiz:quiz_access' %}"; // Use named URL
+        const payload = { quiz_key: quizKey };
+        // We could also send studentInfo in payload if API needed it
+
+        console.log("Attempting to access quiz with key:", quizKey);
+
+        try {
+            // No CSRF needed usually for this type of student access API
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // No 'X-CSRFToken' header needed typically
+                },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                // Key is valid, API returned quiz data (data should be prepared_quiz)
+                console.log("Quiz access successful. Data received:", data);
+                const quizId = data.id; // Get the actual quiz ID from response
+
+                if (!quizId) {
+                    throw new Error("API response missing quiz ID.");
+                }
+
+                // Store info needed for the quiz taking page
+                try {
+                    sessionStorage.setItem('quizStudentInfo', JSON.stringify(studentInfo));
+                    sessionStorage.setItem('quizKeyAttempted', quizKey);
+                    sessionStorage.setItem('quizIdToTake', quizId);
+                    // Store the actual fetched quiz data to avoid re-fetching on next page? Optional but efficient.
+                    // Be mindful of sessionStorage size limits (~5MB).
+                    sessionStorage.setItem(`quizData_${quizId}`, JSON.stringify(data));
+                } catch (e) {
+                    console.error("Session storage error:", e);
+                    showError("Cannot proceed: Browser session storage is unavailable or failed.");
+                    setButtonState(false);
+                    return;
+                }
+
+                // Redirect to the quiz taking page (STU-2)
+                // Construct URL for STU-2 view, e.g., /quiz/take/{quizId}/
+                window.location.href = `/quiz/take/${quizId}/`; // Define this URL in STU-2 step
+
+            } else {
+                // API returned an error (e.g., 404 Not Found, 403 Forbidden, 400 Bad Request)
+                console.log("Quiz access failed:", data);
+                showError(data.error || `Invalid Quiz Key or Quiz is inactive (${response.status}).`);
+                setButtonState(false);
+            }
+
+        } catch (error) {
+            console.error('Error accessing quiz:', error);
+            showError('An error occurred while trying to access the quiz. Please check your connection and try again.');
+            setButtonState(false);
+        }
+
+        // --- Remove Placeholder Simulation ---
+        // setTimeout(() => { ... }, 1000);
+    });
+
+    // --- Helper Functions ---
+    function setButtonState(isLoading) {
+        startQuizBtn.disabled = isLoading;
+        if (isLoading) {
+            startSpinner.classList.remove('d-none');
+        } else {
+            startSpinner.classList.add('d-none');
+        }
+    }
+    function showError(message) {
+        errorMessageDiv.textContent = message;
+        errorMessageDiv.classList.remove('d-none');
+    }
+    function clearMessages() {
+        errorMessageDiv.classList.add('d-none');
+        errorMessageDiv.textContent = '';
+    }
+     // Ensure escapeHTML is available if needed for error messages
+     function escapeHTML(str) {
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+     }
+
+</script>
+{% endblock %}

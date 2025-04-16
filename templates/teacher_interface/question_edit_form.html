@@ -52,12 +52,31 @@
     </div>
 
     <div id="shortTextSection" class="mb-3 border p-3 rounded d-none">
-         <h5>Short Text Answer</h5>
-         <p class="text-muted"><small>Answers will be stored as entered by the student. Correctness typically requires manual review.</small></p>
-         {# Optional: Add field for acceptable answer keywords later #}
-    </div>
+        <h5>Short Text Answer</h5>
+        <p class="text-muted"><small>Answers will be stored as entered by the student.</small></p>
 
-     <div id="mediaSection" class="mb-3 border p-3 rounded d-none">
+        <div class="mb-3">
+            <label class="form-label d-block">Review Mode:</label>
+            <div class="form-check form-check-inline">
+              {# --- Remove checked here --- #}
+              <input class="form-check-input review-mode-radio" type="radio" name="shortAnswerReviewMode" id="reviewModeManual" value="manual">
+              <label class="form-check-label" for="reviewModeManual">Manual Review</label>
+            </div>
+            <div class="form-check form-check-inline">
+              {# --- Add checked here --- #}
+              <input class="form-check-input review-mode-radio" type="radio" name="shortAnswerReviewMode" id="reviewModeAuto" value="auto" checked>
+              <label class="form-check-label" for="reviewModeAuto">Automatic Review</label>
+            </div>
+        </div>
+
+        <div id="correctAnswerInputGroup" class="mb-3 d-none"> {# Initially hidden #}
+            <label for="shortAnswerCorrectText" class="form-label">Correct Answer Text <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="shortAnswerCorrectText" placeholder="Enter the exact correct answer">
+            <small class="text-muted">Case-sensitive matching will be used.</small>
+        </div>
+   </div>
+
+    <div id="mediaSection" class="mb-3 border p-3 rounded d-none">
          <h5>Media (Placeholder)</h5>
          <p class="text-muted"><small>Functionality to upload/link media not yet implemented.</small></p>
          <input type="text" class="form-control" id="mediaUrl" placeholder="Enter Media URL (future)" disabled>
@@ -111,7 +130,14 @@
     const mcqOptionsSection = document.getElementById('mcqOptionsSection');
     const mcqOptionsContainer = document.getElementById('mcqOptionsContainer');
     const addMcqOptionBtn = document.getElementById('addMcqOptionBtn');
+
+
     const shortTextSection = document.getElementById('shortTextSection');
+    const reviewModeRadios = document.querySelectorAll('.review-mode-radio'); // Select all radio buttons
+
+    const correctAnswerInputGroup = document.getElementById('correctAnswerInputGroup');
+    const shortAnswerCorrectText = document.getElementById('shortAnswerCorrectText');
+
     const mediaSection = document.getElementById('mediaSection');
     const questionScore = document.getElementById('questionScore');
     const questionDifficulty = document.getElementById('questionDifficulty');
@@ -128,10 +154,15 @@
 
     // --- Event Listeners ---
     questionType.addEventListener('change', handleQuestionTypeChange);
-    addMcqOptionBtn.addEventListener('click', addMcqOptionInput);
+    addMcqOptionBtn.addEventListener('click', function() { // Wrap call in anonymous function
+        addMcqOptionInput(); // Call without arguments
+    });
     questionForm.addEventListener('submit', handleFormSubmit);
     mcqOptionsContainer.addEventListener('click', handleOptionDelete); // Listener for deleting options
 
+    reviewModeRadios.forEach(radio => { // Add listener for radio buttons
+        radio.addEventListener('change', toggleCorrectAnswerInput);
+    });
 
     // --- Initialization ---
     document.addEventListener('DOMContentLoaded', () => {
@@ -150,6 +181,18 @@
 
     // --- Core Logic Functions ---
 
+    function toggleCorrectAnswerInput() {
+        const autoModeSelected = document.getElementById('reviewModeAuto').checked;
+        if (autoModeSelected) {
+            correctAnswerInputGroup.classList.remove('d-none');
+            shortAnswerCorrectText.required = true; // Make required if auto
+        } else {
+            correctAnswerInputGroup.classList.add('d-none');
+            shortAnswerCorrectText.required = false; // Not required if manual
+            shortAnswerCorrectText.value = ''; // Clear value when hiding
+        }
+    }
+
     function handleQuestionTypeChange() {
         const selectedType = questionType.value;
         // Hide all dynamic sections first
@@ -167,6 +210,7 @@
              }
         } else if (selectedType === 'SHORT_TEXT') {
             shortTextSection.classList.remove('d-none');
+            toggleCorrectAnswerInput(); // Also check radio state when type changes to Short Text
         } else if (selectedType === 'MEDIA') {
             mediaSection.classList.remove('d-none');
         }
@@ -230,8 +274,23 @@
         questionScore.value = qData.score || 1;
         questionDifficulty.value = qData.difficulty || 'Medium';
         questionCategory.value = qData.category || '';
-        mediaUrlInput.value = qData.media_url || ''; // Added
+        mediaUrlInput.value = qData.media_url || '';
 
+        
+         // Populate Short Text fields if applicable
+        if (qData.type === 'SHORT_TEXT') {
+            const reviewMode = qData.short_answer_review_mode || 'manual';
+            document.getElementById(reviewMode === 'auto' ? 'reviewModeAuto' : 'reviewModeManual').checked = true;
+            shortAnswerCorrectText.value = qData.short_answer_correct_text || '';
+            // Call toggle AFTER setting radio button state
+            toggleCorrectAnswerInput();
+        } else {
+            // Reset short text fields if type is not short text
+            document.getElementById('reviewModeManual').checked = true;
+            shortAnswerCorrectText.value = '';
+            toggleCorrectAnswerInput();
+        }
+        
         // Populate MCQ options if applicable
         mcqOptionsContainer.innerHTML = ''; // Clear existing options first
         if (qData.type === 'MCQ' && qData.options) {
@@ -306,6 +365,20 @@
             payload.correct_answer_texts = correctAnswers;
 
         } else if (type === 'SHORT_TEXT') {
+            const reviewMode = document.querySelector('input[name="shortAnswerReviewMode"]:checked').value;
+            const correctText = shortAnswerCorrectText.value.trim();
+
+            payload.short_answer_review_mode = reviewMode;
+            if (reviewMode === 'auto') {
+                if (!correctText) {
+                    showError("Correct Answer Text is required for Automatic Review mode.");
+                    showSavingSpinner(false);
+                    return;
+                }
+                payload.short_answer_correct_text = correctText;
+            }
+            // else: no need to send correct_text if mode is manual
+        
             // No specific fields needed for payload based on API-2
         } else if (type === 'MEDIA') {
              // Payload already includes media_url

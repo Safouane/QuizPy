@@ -17,4 +17,7 @@ urlpatterns = [
     path('api/quizzes/<uuid:quiz_id>/export/', views.quiz_export_api, name='quiz_export'),
     # --- Import URL ---
     path('api/quizzes/import/', views.quiz_import_api, name='quiz_import'),
+    
+    # --- Quiz Access API URL ---
+    path('api/quiz/access/', views.quiz_access_api, name='quiz_access'),
 ]

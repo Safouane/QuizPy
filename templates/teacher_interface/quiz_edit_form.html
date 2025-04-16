@@ -13,17 +13,16 @@
 
 {# Loading indicator (for edit mode primarily) #}
 <div id="loadingSpinner" class="text-center my-5 d-none">
-    <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-    </div>
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    <p>Loading quiz details...</p>
 </div>
 
-<form id="quizForm">
-    {% csrf_token %} {# Important for potential future direct POSTs, good practice #}
-
-    {# Hidden input to store quiz_id if in edit mode #}
+{# Hide form initially until data loaded in edit mode, or immediately shown in create mode #}
+<form id="quizForm" class="d-none">
+    {% csrf_token %}
     <input type="hidden" id="quizId" value="{{ quiz_id|default:'' }}">
 
+    {# --- Basic Quiz Fields --- #}
     <div class="mb-3">
         <label for="quizTitle" class="form-label">Quiz Title <span class="text-danger">*</span></label>
         <input type="text" class="form-control" id="quizTitle" required>
@@ -34,7 +33,106 @@
         <textarea class="form-control" id="quizDescription" rows="3"></textarea>
     </div>
 
-    {# More fields will be added here later (e.g., linking questions, configuration TCHR-5/6) #}
+    <hr>
+    {# --- Questions Section --- #}
+    <div class="mb-3">
+        <h4>Questions in this Quiz</h4>
+        <div id="associatedQuestionsList" class="list-group mb-2">
+            {# Associated questions will be loaded here by JS #}
+            {# This node will be cloned if needed #}
+            <div id="noAssociatedQuestions" class="list-group-item text-muted d-none">No questions added yet.</div>
+        </div>
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#questionBankModal">
+            <i class="bi bi-plus-lg"></i> Add Question from Bank
+        </button>
+        {# Link to Create Question Page - conditionally adds quiz_id query param #}
+        {% url 'teacher_interface:question_create' as create_question_url %}
+        {% if quiz_id %}
+            <a href="{{ create_question_url }}?quiz_id={{ quiz_id }}" class="btn btn-outline-secondary" target="_blank" title="Opens in new tab">
+                <i class="bi bi-pencil-square"></i> Create New Question
+            </a>
+        {% else %}
+             <a href="{{ create_question_url }}" class="btn btn-outline-secondary" target="_blank" title="Opens in new tab">
+                <i class="bi bi-pencil-square"></i> Create New Question
+            </a>
+        {% endif %}
+         <small class="d-block mt-1 text-muted">Create new questions in a separate tab, then click 'Add Question from Bank' to include them.</small>
+    </div>
+    {# --- End Questions Section --- #}
+
+    {# Configuration Section (TCHR-5 / TCHR-6)  #}
+    <hr>
+    {# --- Configuration Section --- #}
+    <div class="mb-3">
+        <h4>Configuration</h4>
+        <div class="row g-3">
+            {# Duration #}
+            <div class="col-md-4">
+                <label for="quizDuration" class="form-label">Duration (minutes)</label>
+                <input type="number" class="form-control" id="quizDuration" min="0" placeholder="Leave blank for no time limit">
+                <small class="text-muted">Set to 0 or leave blank for unlimited time.</small>
+            </div>
+
+            {# Passing Score #}
+            <div class="col-md-4">
+                <label for="quizPassScore" class="form-label">Passing Score (%)</label>
+                <input type="number" class="form-control" id="quizPassScore" min="0" max="100" step="1" value="70" required>
+            </div>
+
+            {# Presentation Mode #}
+            <div class="col-md-4">
+                <label for="quizPresentationMode" class="form-label">Question Presentation</label>
+                <select class="form-select" id="quizPresentationMode">
+                    <option value="all" selected>All questions at once</option>
+                    <option value="one-by-one">One question at a time</option>
+                </select>
+            </div>
+
+            {# Allow Back Navigation (Conditional) #}
+            <div class="col-md-4" id="allowBackNavGroup" style="display: none;"> {# Initially hidden #}
+                <label class="form-label d-block"> </label> {# Spacer for alignment #}
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="quizAllowBack" checked>
+                    <label class="form-check-label" for="quizAllowBack">
+                        Allow navigating back (in one-by-one mode)
+                    </label>
+                </div>
+            </div>
+
+            {# Randomize Question Order #}
+            <div class="row g-3 mt-2"> {# Add some margin-top #}
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" role="switch" id="randomizeQuestions">
+                      <label class="form-check-label" for="randomizeQuestions">Randomize Question Order</label>
+                    </div>
+                </div>
+       
+                {# Shuffle Answer Options #}
+                <div class="col-md-6">
+                    <div class="form-check form-switch">
+                      <input class="form-check-input" type="checkbox" role="switch" id="shuffleAnswers">
+                      <label class="form-check-label" for="shuffleAnswers">Shuffle Answer Options (MCQ)</label>
+                    </div>
+                </div>
+       
+                {# Placeholder for Draw Random Questions - TBD Functionality #}
+                <div class="col-12 mt-3">
+                    <label class="form-label">Build Quiz by Drawing Random Questions (Future)</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" placeholder="Number of questions to draw" disabled>
+                        <select class="form-select" disabled>
+                            <option selected>From Category/Bank...</option>
+                            // Options populated later
+                        </select>
+                        <button class="btn btn-outline-secondary" type="button" disabled>Set Draw Rule</button>
+                    </div>
+                </div>
+
+
+        </div>
+    </div>
+    {# --- End Configuration Section --- #}
 
     <hr>
     <div class="d-flex justify-content-end">
@@ -46,193 +144,596 @@
     </div>
 </form>
 
+
+{# --- Add Question Bank Modal --- #}
+<div class="modal fade modal-lg" id="questionBankModal" tabindex="-1" aria-labelledby="questionBankModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="questionBankModalLabel">Add Questions from Bank</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+          {# Modal Toolbar: Filters #}
+          <div class="row mb-2 gx-2">
+              <div class="col-sm-5">
+                   {# Category Filter Dropdown #}
+                   <select id="modalCategoryFilter" class="form-select form-select-sm">
+                       <option value="">All Categories</option>
+                       {% for category in existing_categories %}
+                       <option value="{{ category }}">{{ category }}</option>
+                       {% endfor %}
+                   </select>
+              </div>
+               <div class="col-sm-4">
+                   <select id="modalTypeFilter" class="form-select form-select-sm">
+                       <option value="">All Types</option>
+                       <option value="MCQ">MCQ</option>
+                       <option value="SHORT_TEXT">Short Text</option>
+                       {# Add other types #}
+                   </select>
+              </div>
+               <div class="col-sm-3">
+                   <button id="modalFilterBtn" class="btn btn-sm btn-outline-secondary w-100">Filter</button>
+              </div>
+          </div>
+
+           {# Modal Loading/Error/Content Area #}
+           <div id="modalLoadingSpinner" class="text-center my-3"><div class="spinner-border spinner-border-sm"></div></div>
+           <div id="modalErrorMessage" class="alert alert-danger d-none"></div>
+           <div id="modalQuestionList" class="list-group">
+               {# Question bank list items will be loaded here #}
+           </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+        <button type="button" class="btn btn-primary" id="addSelectedQuestionsBtn">Add Selected to Quiz</button>
+      </div>
+    </div>
+  </div>
+</div>
+{# --- End Question Bank Modal --- #}
+
 {% endblock %}
+
 
 {% block extra_scripts %}
 {{ block.super }}
 <script>
+    // --- DOM Elements ---
     const quizId = document.getElementById('quizId').value;
     const quizForm = document.getElementById('quizForm');
     const quizTitleInput = document.getElementById('quizTitle');
     const quizDescriptionInput = document.getElementById('quizDescription');
+    const associatedQuestionsList = document.getElementById('associatedQuestionsList');
+    const noAssociatedQuestionsMsg = document.getElementById('noAssociatedQuestions'); // The template node
     const errorMessageDiv = document.getElementById('errorMessage');
     const successMessageDiv = document.getElementById('successMessage');
     const saveButton = document.getElementById('saveButton');
     const saveButtonText = document.getElementById('saveButtonText');
     const saveSpinner = document.getElementById('saveSpinner');
-    const loadingSpinner = document.getElementById('loadingSpinner'); // For edit mode loading
+    const loadingSpinner = document.getElementById('loadingSpinner'); // Main form loading
+    const quizDurationInput = document.getElementById('quizDuration');
+    const quizPassScoreInput = document.getElementById('quizPassScore');
+    const quizPresentationModeSelect = document.getElementById('quizPresentationMode');
+    const allowBackNavGroup = document.getElementById('allowBackNavGroup');
+    const quizAllowBackCheckbox = document.getElementById('quizAllowBack');
 
-    // --- Edit Mode: Fetch existing data (Not fully implemented yet) ---
-    document.addEventListener('DOMContentLoaded', () => {
-        if (quizId) {
-        // If editing, fetch quiz data and populate the form
-            console.log("Edit mode detected for quiz ID:", quizId);
-            saveButtonText.textContent = 'Update Quiz'; // Change button text
-            showLoadingSpinner(true); // Show loading spinner for the whole form area
-            fetchQuizDetails(quizId); // Call function to fetch and populate
-        } else {
-            console.log("Create mode detected");
-            showFormContent(true); // Ensure form is visible in create mode
-        }
+    // --- Modal Elements ---
+    const questionBankModalElement = document.getElementById('questionBankModal');
+    const questionBankModal = new bootstrap.Modal(questionBankModalElement);
+    const modalLoadingSpinner = document.getElementById('modalLoadingSpinner');
+    const modalErrorMessage = document.getElementById('modalErrorMessage');
+    const modalQuestionList = document.getElementById('modalQuestionList');
+    const modalCategoryFilter = document.getElementById('modalCategoryFilter');
+    const modalTypeFilter = document.getElementById('modalTypeFilter');
+    const modalFilterBtn = document.getElementById('modalFilterBtn');
+    const addSelectedQuestionsBtn = document.getElementById('addSelectedQuestionsBtn');
 
-    });
+    // --- Randomization config ---
+    const randomizeQuestionsSwitch = document.getElementById('randomizeQuestions');
+    const shuffleAnswersSwitch = document.getElementById('shuffleAnswers');
 
-    // --- Function for fetching data in edit mode ---
-    async function fetchQuizDetails(id) {
-        try {
-            const apiUrl = `/api/quizzes/${id}/`; // Construct API URL
-            // No CSRF needed for GET usually, but include cookie for session check
-            const response = await fetch(apiUrl); // Default method is GET
+    // --- State ---
+    let currentAssociatedQuestionIds = new Set(); // Store IDs currently linked to the quiz
+    let allBankQuestionsCache = []; // Cache for fetched bank questions to avoid refetch if filters change
 
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+    // --- Helper function to get CSRF token (needed for fetch POST/PUT/DELETE) ---
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
             }
-            const data = await response.json();
-            if (data.quiz) {
-                populateForm(data.quiz); // Populate form with fetched data
-                showFormContent(true); // Show form after population
-            } else {
-                throw new Error("Quiz data not found in API response.");
-            }
-        } catch (error) {
-            console.error("Failed to load quiz details:", error);
-            showError(`Failed to load quiz details. ${error.message}`);
-            // Optionally hide the form or show a more permanent error message
-            showFormContent(false); // Hide form on load error
-        } finally {
-            showLoadingSpinner(false); // Hide loading spinner
         }
+        return cookieValue;
     }
 
-    // --- Function to populate form fields ---
-    function populateForm(quizData) {
-        quizTitleInput.value = quizData.title || '';
-        quizDescriptionInput.value = quizData.description || '';
-        // Populate other fields (like config options) when they are added to the form
-        // Example for later:
-        // document.getElementById('quizDuration').value = quizData.config?.duration || '';
-        // document.getElementById('randomizeQuestions').checked = quizData.config?.randomize_questions || false;
+    // --- Helper Function to escape HTML ---
+    function escapeHTML(str) {
+       if (str === null || str === undefined) return '';
+       // Basic escaping, consider a library for more robust needs
+       const div = document.createElement('div');
+       div.appendChild(document.createTextNode(str));
+       return div.innerHTML;
     }
 
-    // --- Form Submission Logic ---
-    quizForm.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        clearMessages();
-        showSavingSpinner(true);
-
-        const title = quizTitleInput.value;
-        const description = quizDescriptionInput.value;
-
-        // Basic validation
-        if (!title) {
-            showError("Quiz Title is required.");
-            showSavingSpinner(false);
-            return;
-        }
-
-        const payload = {
-            title: title,
-            description: description
-            // Add other fields (like config) as they are added to the form
-        };
-
-        // Determine API endpoint and method (Create vs Update)
-        let apiUrl;
-        let apiMethod;
-
-        if (quizId) {
-            // Update existing quiz (API-1 PUT)
-            apiUrl = `/api/quizzes/${quizId}/`; // Construct URL directly for now
-            apiMethod = 'PUT';
-        } else {
-            // Create new quiz (API-1 POST)
-            apiUrl = "{% url 'quiz:quiz_list_create' %}"; // Use named URL
-            apiMethod = 'POST';
-        }
-
-        try {
-            const csrfToken = quizForm.querySelector('[name=csrfmiddlewaretoken]').value;
-            const response = await fetch(apiUrl, {
-                method: apiMethod,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                const successMsg = quizId ? 'Quiz updated successfully!' : 'Quiz created successfully!';
-                showSuccess(successMsg + " Redirecting...");
-
-                // Redirect back to the quiz list after a short delay
-                setTimeout(() => {
-                     window.location.href = "{% url 'teacher_interface:quiz_list' %}";
-                }, 1500); // 1.5 seconds delay
-
-            } else {
-                showError(data.error || `An error occurred (${response.status})`);
-                showSavingSpinner(false);
-            }
-
-        } catch (error) {
-            console.error('Error saving quiz:', error);
-            showError('An unexpected error occurred while saving.');
-            showSavingSpinner(false);
-        }
-    });
-
-    // --- Helper Functions ---
+     // --- Helper Functions for UI State ---
     function showSavingSpinner(show) {
-         saveButton.disabled = show;
-         if(show) {
-             saveSpinner.classList.remove('d-none');
-             saveButtonText.classList.add('visually-hidden'); // Hide text if desired
-         } else {
-             saveSpinner.classList.add('d-none');
-             saveButtonText.classList.remove('visually-hidden');
-         }
+        saveButton.disabled = show;
+        if(show) {
+            saveSpinner.classList.remove('d-none');
+            // saveButtonText.classList.add('visually-hidden'); // Keep text visible
+        } else {
+            saveSpinner.classList.add('d-none');
+            // saveButtonText.classList.remove('visually-hidden');
+        }
     }
-
     function showError(message) {
         errorMessageDiv.textContent = message;
         errorMessageDiv.classList.remove('d-none');
     }
-
     function showSuccess(message) {
          successMessageDiv.textContent = message;
          successMessageDiv.classList.remove('d-none');
     }
-
     function clearMessages() {
         errorMessageDiv.classList.add('d-none');
         errorMessageDiv.textContent = '';
         successMessageDiv.classList.add('d-none');
         successMessageDiv.textContent = '';
     }
+    function showLoadingSpinner(show) { // Main form spinner
+        if (show) { loadingSpinner.classList.remove('d-none'); }
+        else { loadingSpinner.classList.add('d-none'); }
+    }
+    function showFormContent(show) { // Main form content
+         if (show) { quizForm.classList.remove('d-none'); }
+         else { quizForm.classList.add('d-none'); }
+    }
 
-    function showLoadingSpinner(show) {
-        // Controls the main loading spinner for the form area in edit mode
-        if (show) {
-            loadingSpinner.classList.remove('d-none');
-            quizForm.classList.add('d-none'); // Hide form while loading details
-        } else {
-            loadingSpinner.classList.add('d-none');
-            // quizForm.classList.remove('d-none'); // Form shown by showFormContent
+
+    // --- Fetching Quiz & Associated Questions ---
+    async function fetchQuizDetails(id) {
+        console.log("DEBUG: fetchQuizDetails called for ID:", id);
+        clearMessages();
+        currentAssociatedQuestionIds.clear();
+        try {
+            const quizApiUrl = `/api/quizzes/${id}/`;
+            const quizResponse = await fetch(quizApiUrl);
+            console.log("DEBUG: fetchQuizDetails - Quiz API Status:", quizResponse.status);
+            if (!quizResponse.ok) throw new Error(`Failed to load quiz (status: ${quizResponse.status})`);
+
+            const quizData = await quizResponse.json();
+            console.log("DEBUG: fetchQuizDetails - Quiz API Data:", quizData);
+
+            if (quizData.quiz) {
+                populateForm(quizData.quiz);
+                const questionIds = quizData.quiz.questions || [];
+                console.log("DEBUG: fetchQuizDetails - Associated Question IDs:", questionIds);
+                questionIds.forEach(qId => currentAssociatedQuestionIds.add(qId));
+                await fetchAndDisplayAssociatedQuestions(); // Fetch details for display AFTER storing IDs
+                showFormContent(true);
+            } else {
+                throw new Error("Quiz data not found in API response.");
+            }
+        } catch (error) {
+            console.error("Failed to load quiz details:", error);
+            showError(`Failed to load quiz details. ${error.message}`);
+            showFormContent(false);
+        } finally {
+            showLoadingSpinner(false);
+        }
+     }
+
+    // --- Displaying Associated Questions ---
+    /**
+     * Fetches details for all question IDs in currentAssociatedQuestionIds
+     * and calls addAssociatedQuestionToList to display them.
+     */
+    async function fetchAndDisplayAssociatedQuestions() {
+        console.log("DEBUG: fetchAndDisplayAssociatedQuestions called. IDs:", currentAssociatedQuestionIds);
+        associatedQuestionsList.innerHTML = ''; // Clear previous list
+        // Make sure the original template node isn't cleared if it's inside
+        if (noAssociatedQuestionsMsg && noAssociatedQuestionsMsg.parentNode === associatedQuestionsList) {
+            associatedQuestionsList.removeChild(noAssociatedQuestionsMsg);
+        }
+        noAssociatedQuestionsMsg.classList.add('d-none'); // Hide message initially
+
+        if (currentAssociatedQuestionIds.size === 0) {
+            console.log("DEBUG: No associated questions to display.");
+            updateAssociatedQuestionsDisplay(); // Show "No questions" message
+            return;
+        }
+
+        console.log("DEBUG: Fetching details for", currentAssociatedQuestionIds.size, "questions.");
+        let hasError = false;
+        const fetchPromises = [];
+
+        currentAssociatedQuestionIds.forEach(qId => {
+            const qApiUrl = `/api/questions/${qId}/`;
+            fetchPromises.push(
+                fetch(qApiUrl)
+                    .then(response => {
+                        if (!response.ok) {
+                            console.warn(`Failed to fetch details for question ${qId}, status: ${response.status}`);
+                            return null; // Indicate failure for this specific question
+                        }
+                        return response.json();
+                    })
+                    .then(data => data?.question) // Extract question object, allow null if response was ok but no 'question' key
+                    .catch(error => {
+                        console.error(`Error fetching question ${qId}:`, error);
+                        hasError = true;
+                        return null; // Indicate failure
+                    })
+            );
+        });
+
+        const questionsData = await Promise.all(fetchPromises);
+        console.log("DEBUG: Fetched question details results:", questionsData);
+
+        let itemsAdded = 0;
+        questionsData.forEach(qData => {
+            if (qData) {
+                addAssociatedQuestionToList(qData); // Call the function to add item to list
+                itemsAdded++;
+            } else {
+                 // Optionally display error placeholder in the list
+                 const li = document.createElement('div');
+                 li.classList.add('list-group-item', 'list-group-item-warning');
+                 li.textContent = 'Error loading question details.';
+                 associatedQuestionsList.appendChild(li);
+                 hasError = true; // Ensure error state is marked
+            }
+        });
+        console.log("DEBUG: Added", itemsAdded, "question items to the list.");
+
+        updateAssociatedQuestionsDisplay(); // Update message visibility based on final count
+        if (hasError) {
+            showError("Note: There was an error loading details for one or more associated questions.");
         }
     }
 
-    function showFormContent(show) {
-        // Shows/hides the main form content area
-        if (show) {
-            quizForm.classList.remove('d-none');
+    /**
+     * Creates and appends a list item representing an associated question
+     * to the main form's question list area (#associatedQuestionsList).
+     * @param {object} qData - The question data object fetched from the API.
+     */
+    function addAssociatedQuestionToList(qData) {
+         console.log("DEBUG: addAssociatedQuestionToList called for:", qData?.id);
+         // Check if the element we append to exists
+         if (!associatedQuestionsList) {
+              console.error("CRITICAL: associatedQuestionsList element not found.");
+              return;
+         }
+         // Hide the "no questions" message IF it's currently visible
+          if (noAssociatedQuestionsMsg && !noAssociatedQuestionsMsg.classList.contains('d-none')) {
+              noAssociatedQuestionsMsg.classList.add('d-none');
+          }
+
+         const li = document.createElement('div');
+         li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+         li.dataset.questionId = qData.id; // Store ID for removal later
+
+         const textPreview = qData.text?.length > 100 ? qData.text.substring(0, 100) + '...' : qData.text;
+
+         li.innerHTML = `
+              <span>
+                   <span class="badge bg-secondary me-2">${escapeHTML(qData.type)}</span>
+                   ${escapeHTML(textPreview || 'N/A')}
+                   <small class="text-muted ms-2">(${escapeHTML(qData.category || 'Uncategorized')})</small>
+              </span>
+              <button type="button" class="btn btn-sm btn-outline-danger remove-question-btn" title="Remove from this quiz">
+                  <i class="bi bi-x-lg"></i>
+              </button>
+         `;
+         associatedQuestionsList.appendChild(li); // Append to the list on the main form
+    }
+
+    /**
+     * Handles clicks on the remove ('X') button for associated questions.
+     */
+    function handleRemoveQuestionClick(event) {
+         const removeButton = event.target.closest('.remove-question-btn');
+         if (removeButton) {
+              const listItem = removeButton.closest('.list-group-item');
+              const qIdToRemove = listItem.dataset.questionId;
+              console.log("DEBUG: Removing question ID:", qIdToRemove);
+              currentAssociatedQuestionIds.delete(qIdToRemove); // Remove from state
+              listItem.remove(); // Remove from display
+              updateAssociatedQuestionsDisplay(); // Update message visibility
+         }
+    }
+
+    /**
+     * Shows or hides the 'No questions added yet' message based on
+     * whether the currentAssociatedQuestionIds Set is empty.
+     */
+    function updateAssociatedQuestionsDisplay() {
+        console.log("DEBUG: updateAssociatedQuestionsDisplay. Current count:", currentAssociatedQuestionIds.size);
+        // Ensure the template node exists
+        if (!noAssociatedQuestionsMsg) return;
+
+        if (currentAssociatedQuestionIds.size === 0) {
+            // Ensure the message node is appended if not already there
+            if (!associatedQuestionsList.contains(noAssociatedQuestionsMsg)) {
+                 associatedQuestionsList.appendChild(noAssociatedQuestionsMsg);
+            }
+            noAssociatedQuestionsMsg.classList.remove('d-none');
         } else {
-            quizForm.classList.add('d-none');
+             noAssociatedQuestionsMsg.classList.add('d-none');
         }
     }
+
+
+    // --- Modal Logic ---
+
+    /**
+     * Fetches questions from the API based on modal filters
+     * and triggers rendering the modal list.
+     */
+    async function loadQuestionBank() {
+        console.log("DEBUG: loadQuestionBank called.");
+        modalLoadingSpinner.classList.remove('d-none');
+        modalErrorMessage.classList.add('d-none');
+        modalQuestionList.innerHTML = ''; // Clear previous list
+
+        const categoryFilter = modalCategoryFilter.value; // Read value from select
+        const typeFilter = modalTypeFilter.value;
+        let apiUrl = "{% url 'quiz:question_list_create' %}"; // API-2 GET All questions
+        const queryParams = new URLSearchParams();
+        if (categoryFilter) queryParams.append('category', categoryFilter);
+        if (typeFilter) queryParams.append('type', typeFilter);
+        if (queryParams.toString()) apiUrl += `?${queryParams.toString()}`;
+
+        console.log("DEBUG: Fetching questions for modal from API URL:", apiUrl);
+
+        try {
+            const response = await fetch(apiUrl);
+            console.log("DEBUG: Modal API Response Status:", response.status);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data = await response.json();
+            console.log("DEBUG: Modal API Response Data:", data);
+            allBankQuestionsCache = data.questions || []; // Cache results
+            console.log("DEBUG: Rendering modal list with questions:", allBankQuestionsCache.length);
+            renderModalQuestionList(); // Call function to display them
+        } catch (error) {
+            console.error("Failed to load question bank:", error);
+            modalErrorMessage.textContent = `Error loading questions: ${error.message}`;
+            modalErrorMessage.classList.remove('d-none');
+        } finally {
+            console.log("DEBUG: Hiding modal spinner.");
+            modalLoadingSpinner.classList.add('d-none');
+        }
+    } 
+    // End of function load_question_bank
+
+
+    /**
+     * Renders the list of questions inside the modal,
+     * disabling checkboxes for questions already associated with the current quiz.
+     */
+    function renderModalQuestionList() {
+        console.log("DEBUG: renderModalQuestionList called.");
+        modalQuestionList.innerHTML = ''; // Clear previous
+        if (allBankQuestionsCache.length === 0) {
+            modalQuestionList.innerHTML = '<div class="list-group-item text-muted">No questions found matching filters.</div>';
+            return;
+        }
+
+        allBankQuestionsCache.forEach(q => {
+            const isAlreadyAssociated = currentAssociatedQuestionIds.has(q.id); // Check against the Set
+            const li = document.createElement('label'); // Use label for checkbox interaction
+            li.classList.add('list-group-item', 'd-flex', 'justify-content-between', 'align-items-center');
+            li.classList.toggle('list-group-item-light', isAlreadyAssociated); // Style if already added
+            li.style.cursor = isAlreadyAssociated ? 'not-allowed' : 'pointer'; // Indicate disabled state
+
+            const textPreview = q.text?.length > 80 ? q.text.substring(0, 80) + '...' : q.text;
+            const checkboxId = `modal_q_${q.id}`;
+
+            li.innerHTML = `
+                <span style="${isAlreadyAssociated ? 'opacity: 0.6;' : ''}">
+                    <input class="form-check-input me-2 question-select-checkbox"
+                           type="checkbox"
+                           value="${q.id}"
+                           id="${checkboxId}"
+                           ${isAlreadyAssociated ? 'disabled checked' : ''}> <!-- Keep checked visually when disabled -->
+                    <span class="badge bg-info me-2">${escapeHTML(q.type)}</span>
+                    ${escapeHTML(textPreview || 'N/A')}
+                    <small class="text-muted ms-2">(${escapeHTML(q.category || 'Uncategorized')})</small>
+                </span>
+                <a href="/teacher/questions/${q.id}/edit/" target="_blank" class="btn btn-sm btn-outline-secondary ms-2" title="View/Edit Question (opens new tab)">
+                    <i class="bi bi-pencil"></i>
+                </a>
+            `;
+            modalQuestionList.appendChild(li);
+        });
+    }
+
+    /**
+     * Handles the click event for the "Add Selected to Quiz" button in the modal.
+     * Adds selected question IDs to the currentAssociatedQuestionIds Set and refreshes the main form display.
+     */
+    function addSelectedQuestionsToQuiz() {
+        const selectedCheckboxes = modalQuestionList.querySelectorAll('.question-select-checkbox:checked:not(:disabled)'); // Only get newly checked boxes
+        console.log(`DEBUG: Found ${selectedCheckboxes.length} newly selected questions.`);
+        selectedCheckboxes.forEach(checkbox => {
+            currentAssociatedQuestionIds.add(checkbox.value); // Add ID to our state Set
+        });
+        questionBankModal.hide(); // Close modal
+        fetchAndDisplayAssociatedQuestions(); // Refresh the list on the main form
+    }''
+
+
+
+    // --- Form Population ---
+    function populateForm(quizData) {
+        console.log("DEBUG: populateForm called with data:", quizData);
+        quizTitleInput.value = quizData.title || '';
+        quizDescriptionInput.value = quizData.description || '';
+        // --- Populate Config Fields ---
+        const config = quizData.config || {}; // Default to empty object if config is missing
+        quizDurationInput.value = config.duration ?? ''; // Use ?? for null/undefined -> empty string
+        quizPassScoreInput.value = config.pass_score ?? 70; // Default to 70
+        quizPresentationModeSelect.value = config.presentation_mode || 'all'; // Default to 'all'
+        quizAllowBackCheckbox.checked = config.allow_back !== undefined ? config.allow_back : true; // Default to true
+        // --- Population for Randomization ---
+        randomizeQuestionsSwitch.checked = config.randomize_questions || false; // Default false
+        shuffleAnswersSwitch.checked = config.shuffle_answers || false; // Default false
+
+
+
+        // Trigger change handler to show/hide 'allow back' based on loaded value
+        handlePresentationModeChange();
+        // --- End Populate Config ---
+    }
+
+    function handlePresentationModeChange() {
+        if (quizPresentationModeSelect.value === 'one-by-one') {
+            allowBackNavGroup.style.display = 'block';
+        } else {
+            allowBackNavGroup.style.display = 'none';
+    }
+}
+
+
+    // --- Form Submission ---
+    async function handleFormSubmit(event) {
+       event.preventDefault();
+       console.log("DEBUG: handleFormSubmit called.");
+       clearMessages();
+       showSavingSpinner(true);
+
+       const title = quizTitleInput.value;
+       const description = quizDescriptionInput.value;
+
+       if (!title) {
+           showError("Quiz Title is required.");
+           showSavingSpinner(false);
+           return;
+       }
+
+       // --- Collect Configuration Data ---
+        let durationValue = quizDurationInput.value.trim();
+        durationValue = (durationValue === '' || parseInt(durationValue, 10) <= 0) ? null : parseInt(durationValue, 10); // Allow blank or 0 for null/unlimited
+
+        const passScoreValue = parseFloat(quizPassScoreInput.value); // Already required, should have value
+        const presentationModeValue = quizPresentationModeSelect.value;
+        const allowBackValue = quizAllowBackCheckbox.checked;
+
+        const configPayload = {
+                duration: durationValue,
+                pass_score: (passScoreValue >= 0 && passScoreValue <= 100) ? passScoreValue : 70, // Add safety check
+                presentation_mode: presentationModeValue,
+                allow_back: allowBackValue,
+                // --- Randomization Values ---
+                randomize_questions: randomizeQuestionsSwitch.checked,
+                shuffle_answers: shuffleAnswersSwitch.checked
+        };
+            console.log("DEBUG: Collected Config Payload:", configPayload);
+
+        // --- Prepare Full Payload ---
+        const payload = {
+            title: title,
+            description: description,
+            questions: Array.from(currentAssociatedQuestionIds),
+            config: configPayload // Include the config object
+        };
+        console.log("DEBUG: Submitting full payload:", payload);
+
+
+       let apiUrl;
+       let apiMethod;
+       if (quizId) {
+           apiUrl = `/api/quizzes/${quizId}/`;
+           apiMethod = 'PUT';
+       } else {
+           apiUrl = "{% url 'quiz:quiz_list_create' %}";
+           apiMethod = 'POST';
+       }
+       console.log("DEBUG: API Method:", apiMethod, "URL:", apiUrl);
+
+
+       try {
+           const csrfTokenElement = quizForm.querySelector('[name=csrfmiddlewaretoken]');
+            const csrfToken = csrfTokenElement ? csrfTokenElement.value : getCookie('csrftoken'); // Fallback needed? Should be in form.
+            if (!csrfToken) console.warn("CSRF Token not found!");
+
+           const response = await fetch(apiUrl, {
+               method: apiMethod,
+               headers: {
+                   'Content-Type': 'application/json',
+                   'X-CSRFToken': csrfToken
+               },
+               body: JSON.stringify(payload)
+           });
+            console.log("DEBUG: Save API Response Status:", response.status);
+
+           const data = await response.json();
+            console.log("DEBUG: Save API Response Data:", data);
+
+           if (response.ok) {
+               const successMsg = quizId ? 'Quiz updated successfully!' : 'Quiz created successfully!';
+               showSuccess(successMsg + " Redirecting...");
+               setTimeout(() => {
+                    window.location.href = "{% url 'teacher_interface:quiz_list' %}";
+               }, 1500);
+           } else {
+               showError(data.error || `An error occurred (${response.status})`);
+               showSavingSpinner(false);
+           }
+
+       } catch (error) {
+           console.error('Error saving quiz:', error);
+           showError('An unexpected error occurred while saving.');
+           showSavingSpinner(false);
+       }
+    }
+
+
+    // --- Initialization Code ---
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log("DEBUG: DOM Loaded. Quiz ID:", quizId);
+        if (quizId) {
+            // Edit Mode
+            saveButtonText.textContent = 'Update Quiz';
+            showLoadingSpinner(true); // Show main form loading spinner
+            fetchQuizDetails(quizId); // Fetches quiz AND associated question details
+        } else {
+            // Create Mode
+            console.log("DEBUG: Entering Create Mode logic.");
+            saveButtonText.textContent = 'Save Quiz';
+            showFormContent(true); // Show form immediately
+            // Not sure about the position of line below
+            handlePresentationModeChange(); // Set initial visibility of Allow Back checkbox
+
+            updateAssociatedQuestionsDisplay(); // Show "No questions" message
+            console.log("DEBUG: Create Mode logic finished.");
+        }
+
+        // --- Event Listeners ---
+        quizForm.addEventListener('submit', handleFormSubmit);
+        // Modal listeners
+        modalFilterBtn.addEventListener('click', loadQuestionBank);
+        addSelectedQuestionsBtn.addEventListener('click', addSelectedQuestionsToQuiz);
+        questionBankModalElement.addEventListener('shown.bs.modal', () => {
+             console.log("DEBUG: Modal shown event triggered on Quiz Edit page.");
+             loadQuestionBank(); // Load bank when modal is shown
+        });
+        // Listener for removing questions (delegated)
+        associatedQuestionsList.addEventListener('click', handleRemoveQuestionClick);
+        quizPresentationModeSelect.addEventListener('change', handlePresentationModeChange);
+
+        console.log("DEBUG: All event listeners attached.");
+    });
 
 </script>
 {% endblock %}
-

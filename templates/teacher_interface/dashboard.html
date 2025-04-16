@@ -29,10 +29,20 @@
       <div class="card-body">
         <h5 class="card-title">Question Bank</h5>
         <p class="card-text fs-1">{{ total_questions_count }}</p> {# Display count #}
-        {# --- MODIFIED LINK --- #}
-        <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-secondary">Add New Question</a> {# Link to TCHR-3 Create page #}
-        {# Link to Manage Questions (TCHR-4) later #}
+        <a href="{% url 'teacher_interface:question_bank' %}" class="btn btn-primary me-2">Manage Questions</a>
+        <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-secondary">Add New Question</a>
       </div>
+
+      <!-- <div class="card-body">
+        <h5 class="card-title">Question Bank</h5>
+        <p class="card-text fs-1">{{ total_questions_count }}</p>
+        <div class="d-grid gap-3 col-10 mx-auto">
+          <a href="{% url 'teacher_interface:question_bank' %}" class="btn btn-primary">Manage Questions</a>
+          <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-secondary">Add New Question</a>
+        </div>
+      </div> -->
+
+
        <div class="card-footer text-muted">
         Add, edit, and organize questions.
       </div>
