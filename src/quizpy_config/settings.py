@@ -66,6 +66,7 @@ INSTALLED_APPS = [
     'authentication',
     'quiz.apps.QuizConfig',
     'teacher_interface.apps.TeacherInterfaceConfig', 
+    'student_interface.apps.StudentInterfaceConfig',
 
 
 ]

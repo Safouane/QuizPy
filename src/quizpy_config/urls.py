@@ -23,5 +23,15 @@ urlpatterns = [
     path('', include('core.urls')), # Include core app's URLs at the root
     path('', include('quiz.urls')),
     path('', include('teacher_interface.urls')), # includes '/teacher/dashboard/'
-# Add other app URLs here later (e.g., path('auth/', include('auth_app.urls')))
+    path('', include('student_interface.urls')), # Add student UI urls (includes /quiz/start/)
+
+    # --- Refined URL Structure Suggestion ---
+    # path('admin/', admin.site.urls),
+    # path('auth/', include('authentication.urls')), # Login/logout specific
+    # path('teacher/', include('teacher_interface.urls')), # Teacher UI pages under /teacher/
+    # path('student/', include('student_interface.urls')), # Student UI pages under /student/ (e.g., /student/start/)
+    # path('quiz/', include('quiz.urls')), # Quiz taking flow under /quiz/ (e.g., /quiz/take/<id>) - Requires moving API?
+    # path('api/', include('quiz.api_urls')), # Separate API urls under /api/
+    # path('', include('core.urls')), # Homepage etc.
+    # --- Decide on final URL structure based on clarity ---
 ]
