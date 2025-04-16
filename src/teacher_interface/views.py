@@ -91,3 +91,14 @@ def question_edit_view(request, question_id=None):
     # context['existing_categories'] = categories
     return render(request, 'teacher_interface/question_edit_form.html', context)
 
+@teacher_required
+def question_bank_view(request):
+    """
+    Renders the Question Bank page.
+    Questions are loaded asynchronously via JavaScript calling API-2.
+    """
+    context = {
+        'username': request.user.username
+    }
+    # Potentially pass filter options like categories here later
+    return render(request, 'teacher_interface/question_bank.html', context)

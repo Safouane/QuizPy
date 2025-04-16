@@ -48,7 +48,8 @@ def quiz_list_create_api(request):
                 'id': new_quiz_id,
                 'title': title,
                 'description': description,
-                'questions': [], # List of question IDs belonging to this quiz
+                # Accept questions list, default to empty if not provided
+                'questions': request_data.get('questions', []),
                 'config': { # Default config, can be updated later via PUT
                     'duration': None, # in minutes
                     'pass_score': 70, # percentage
@@ -110,16 +111,61 @@ def quiz_detail_api(request, quiz_id):
             request_data = json.loads(request.body)
 
             # Update allowed fields (add more fields as needed)
-            if 'title' in request_data:
-                quiz['title'] = request_data['title']
-            if 'description' in request_data:
-                quiz['description'] = request_data.get('description', quiz.get('description', '')) # Handle optional field
-            if 'config' in request_data: # Allow updating config block
-                # Simple merge - careful, might overwrite nested keys unintentionally
-                # A more robust update would merge nested dicts carefully
-                quiz['config'] = {**quiz.get('config', {}), **request_data['config']}
-            if 'archived' in request_data:
-                 quiz['archived'] = bool(request_data['archived'])
+            # Update allowed fields
+            if 'title' in request_data: quiz['title'] = request_data['title']
+            if 'description' in request_data: quiz['description'] = request_data.get('description', quiz.get('description', ''))
+            if 'config' in request_data: quiz['config'] = {**quiz.get('config', {}), **request_data['config']}
+            if 'archived' in request_data: quiz['archived'] = bool(request_data['archived'])
+            
+            # --- ADDED: Update questions list ---
+            if 'questions' in request_data:
+            # Basic validation: Ensure it's a list of strings (or can be converted)
+                try:
+                    quiz['questions'] = [str(q_id) for q_id in request_data['questions']]
+                except (TypeError, ValueError):
+                    return JsonResponse({'error': 'Invalid format for questions list.'}, status=400)
+            # --- END ADD ---
+
+            if 'config' in request_data:
+                new_config = request_data['config']
+                # Get existing config or default to empty dict
+                current_config = quiz.get('config', {})
+
+                # Validate and update specific config fields
+                # Duration (Allow null or positive integer)
+                duration = new_config.get('duration', current_config.get('duration')) # Keep old if not provided
+                if duration is not None:
+                    try:
+                         duration = int(duration)
+                         if duration < 0: duration = None # Allow only non-negative or null
+                    except (ValueError, TypeError):
+                         duration = None # Reset if invalid type/value
+                current_config['duration'] = duration
+
+                # Pass Score (Allow number between 0 and 100)
+                pass_score = new_config.get('pass_score', current_config.get('pass_score', 70)) # Keep old or default
+                try:
+                    pass_score = float(pass_score)
+                    if not (0 <= pass_score <= 100):
+                         pass_score = 70 # Reset to default if out of range
+                except (ValueError, TypeError):
+                    pass_score = 70 # Reset if invalid
+                current_config['pass_score'] = pass_score
+
+                # Presentation Mode
+                presentation_mode = new_config.get('presentation_mode', current_config.get('presentation_mode', 'all'))
+                if presentation_mode not in ['all', 'one-by-one']:
+                    presentation_mode = 'all' # Default if invalid
+                current_config['presentation_mode'] = presentation_mode
+
+                # Allow Back Navigation (Boolean)
+                allow_back = new_config.get('allow_back', current_config.get('allow_back', True))
+                current_config['allow_back'] = bool(allow_back) # Ensure boolean
+
+                # Assign the updated config back
+                quiz['config'] = current_config
+
+            if 'archived' in request_data: quiz['archived'] = bool(request_data['archived'])
 
             # Replace the old quiz dict with the updated one in the list
             quizzes[quiz_index] = quiz

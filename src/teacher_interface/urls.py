@@ -15,6 +15,7 @@ urlpatterns = [
 
     path('teacher/questions/new/', views.question_edit_view, name='question_create'),
     path('teacher/questions/<uuid:question_id>/edit/', views.question_edit_view, name='question_edit'),
-    
+
+    path('teacher/questions/', views.question_bank_view, name='question_bank'),
 
 ]
