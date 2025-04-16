@@ -213,6 +213,7 @@ def question_list_create_api(request):
         query_params = request.GET
         quiz_id_filter = query_params.get('quiz_id')
         category_filter = query_params.get('category')
+        type_filter = query_params.get('type') # <<< Make sure you read this parameter
         # Add more filters like difficulty, type if needed
 
         filtered_questions = all_questions
@@ -222,7 +223,8 @@ def question_list_create_api(request):
         if category_filter:
              # Case-insensitive category filter
             filtered_questions = [q for q in filtered_questions if category_filter.lower() == q.get('category', '').lower()]
-
+        if type_filter:
+            filtered_questions = [q for q in filtered_questions if type_filter.upper() == q.get('type', '').upper()] # Case-insensitive type check
         # If no filters, returns all questions (acting as question bank)
         return JsonResponse({'questions': filtered_questions})
 

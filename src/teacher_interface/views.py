@@ -2,6 +2,7 @@ from django.shortcuts import render, redirect, get_object_or_404 # Add redirect,
 from django.contrib.auth.decorators import login_required # Standard Django login required
 from authentication.decorators import teacher_required # Our custom decorator checking is_staff
 from django.urls import reverse
+from core.json_storage import load_data
 
 # Import functions to potentially fetch summary data later (from quiz app)
 # from quiz.views import ... (or better, utility functions later)
@@ -70,6 +71,23 @@ def quiz_edit_view(request, quiz_id=None):
             'quiz_id': None,
             'form_title': 'Create New Quiz'
         }
+    # --- Verify this block exists and is correct ---
+    try:
+        all_data = load_data()
+        categories = sorted(list(set(
+            q.get('category', 'Uncategorized') # Get category or default
+            for q in all_data.get('questions', []) if q.get('category', '').strip() # Check if category exists and is not empty/whitespace
+        )))
+         # Handle potential 'Uncategorized' default if needed - this logic might need refinement
+         # If 'Uncategorized' is a possible value from get(), it will be included by the set automatically if present.
+         # If questions might have NO category key or empty strings, the list comprehension filters them out.
+
+        print(f"DEBUG: Found categories in view: {categories}") # Add logging
+    except Exception as e:
+        print(f"Error loading categories for filter: {e}")
+        categories = []
+    context['existing_categories'] = categories
+    # --- END Verify ---
 
     return render(request, 'teacher_interface/quiz_edit_form.html', context)
 
