@@ -196,15 +196,19 @@ def question_list_create_api(request):
             # Prepare basic question structure
             new_question = {
                 'id': new_question_id,
-                'quiz_ids': request_data.get('quiz_ids', []), # Optional list of associated quiz IDs
+                'quiz_ids': request_data.get('quiz_ids', []),
                 'text': text,
                 'type': q_type,
                 'options': [],
                 'correct_answer': [],
-                'score': request_data.get('score', 1), # Default score
+                'score': request_data.get('score', 1),
                 'difficulty': request_data.get('difficulty', 'Medium'),
                 'category': request_data.get('category', 'Uncategorized'),
-                'media_url': request_data.get('media_url')
+                'media_url': request_data.get('media_url'),
+                # --- ADDED FOR SHORT TEXT ---
+                'short_answer_review_mode': 'manual', # Default mode
+                'short_answer_correct_text': None
+                # --- END ADD ---
             }
 
             # --- Handle MCQ Specific Fields ---
@@ -231,8 +235,17 @@ def question_list_create_api(request):
 
             # --- Handle other types (e.g., SHORT_TEXT) - add validation/fields as needed ---
             elif q_type == 'SHORT_TEXT':
-                # Maybe store acceptable answers or leave for manual grading
-                pass # No extra fields needed initially
+                review_mode = request_data.get('short_answer_review_mode', 'manual')
+                correct_text = request_data.get('short_answer_correct_text', None)
+
+                if review_mode not in ['manual', 'auto']:
+                    return JsonResponse({'error': 'Invalid short answer review mode.'}, status=400)
+                if review_mode == 'auto' and not correct_text:
+                    return JsonResponse({'error': 'Correct answer text is required for automatic review mode.'}, status=400)
+
+                new_question['short_answer_review_mode'] = review_mode
+                new_question['short_answer_correct_text'] = correct_text if review_mode == 'auto' else None
+
 
             # Add to list and save
             all_questions.append(new_question)
@@ -307,8 +320,28 @@ def question_detail_api(request, question_id):
             if 'media_url' in request_data: question['media_url'] = request_data.get('media_url') # Allow setting to null
             if 'quiz_ids' in request_data: question['quiz_ids'] = request_data['quiz_ids'] # Overwrite associated quizzes
 
+            # --- Update Short Text Specific Fields ---
+            if question.get('type') == 'SHORT_TEXT':
+                if 'short_answer_review_mode' in request_data:
+                    review_mode = request_data['short_answer_review_mode']
+                    if review_mode not in ['manual', 'auto']:
+                        return JsonResponse({'error': 'Invalid short answer review mode.'}, status=400)
+                    question['short_answer_review_mode'] = review_mode
+                    # Reset correct text if switching to manual
+                    if review_mode == 'manual':
+                        question['short_answer_correct_text'] = None
+
+                if 'short_answer_correct_text' in request_data:
+                    # Only allow setting correct text if mode is auto
+                    if question.get('short_answer_review_mode') == 'auto':
+                        correct_text = request_data['short_answer_correct_text']
+                        if not correct_text:
+                            return JsonResponse({'error': 'Correct answer text cannot be empty for automatic review mode.'}, status=400)
+                        question['short_answer_correct_text'] = correct_text
+                    # else: ignore correct_text if mode is manual
+
             # Update MCQ specific fields carefully
-            if question['type'] == 'MCQ':
+            elif question['type'] == 'MCQ':
                 if 'options' in request_data: # Expect list of texts
                      options_data = request_data.get('options', [])
                      correct_answer_texts = request_data.get('correct_answer_texts', []) # Expect correct texts again
