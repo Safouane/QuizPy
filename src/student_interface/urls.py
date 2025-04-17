@@ -12,7 +12,10 @@ urlpatterns = [
 
     # --- URL for Quiz Taking Page ---
     path('quiz/take/<uuid:quiz_id>/', views.quiz_taking_view, name='quiz_taking'),
-    # --- End Add ---
     # Add URL for feedback page (STU-3) later
     # e.g., path('quiz/results/<uuid:attempt_id>/', views.quiz_results_view, name='quiz_results'),
+
+    # --- URL for Results Page ---
+    path('quiz/results/<uuid:attempt_id>/', views.quiz_results_view, name='quiz_results'),
+
 ]
