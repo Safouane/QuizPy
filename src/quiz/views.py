@@ -7,6 +7,8 @@ import uuid
 from core.json_storage import load_data, save_data
 from django.http import HttpResponse
 import random
+import datetime
+from decimal import Decimal, ROUND_HALF_UP # For accurate score calculation
 
 
 # Import the decorator we created in AUTH-3
@@ -811,3 +813,177 @@ def quiz_access_api(request):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+    
+
+
+@csrf_exempt # Student submissions likely won't have CSRF from standard forms
+@require_http_methods(["POST"])
+def quiz_submit_api(request, quiz_id):
+    """
+    API endpoint for students to submit their completed quiz answers.
+    Performs grading, calculates score, stores attempt, and returns feedback.
+    """
+    try:
+        submission_data = json.loads(request.body)
+        print(f"DEBUG: Received submission for quiz_id: {quiz_id}") # Log
+
+        # --- Extract data from submission ---
+        student_info = submission_data.get('student_info')
+        student_answers = submission_data.get('answers') # { question_id: answer }
+        # Timestamps likely sent as JS Date.now() milliseconds - convert if needed
+        # start_time_ms = submission_data.get('start_time')
+        # end_time_ms = submission_data.get('end_time')
+        # submitted_due_to_timeout = submission_data.get('submitted_due_to_timeout', False)
+
+        # Basic validation
+        if not student_info or not isinstance(student_info, dict) or not student_info.get('name'):
+             return JsonResponse({'error': 'Missing or invalid student information.'}, status=400)
+        if not student_answers or not isinstance(student_answers, dict):
+             return JsonResponse({'error': 'Missing or invalid answers data.'}, status=400)
+
+        # --- Load Quiz and Question Data ---
+        data = load_data()
+        all_quizzes = data.get('quizzes', [])
+        all_questions = data.get('questions', [])
+        target_quiz = None
+
+        for q in all_quizzes:
+             if str(q.get('id')) == str(quiz_id):
+                  target_quiz = q
+                  break
+
+        if target_quiz is None:
+             return JsonResponse({'error': 'Quiz not found.'}, status=404)
+        # Should not happen if access key was validated, but good check
+        if target_quiz.get('archived'):
+             return JsonResponse({'error': 'Cannot submit to an archived quiz.'}, status=403)
+
+        quiz_config = target_quiz.get('config', {})
+        pass_score_threshold = Decimal(quiz_config.get('pass_score', 70)) # Use Decimal
+
+        # Get relevant questions for this quiz
+        question_ids_in_quiz = set(target_quiz.get('questions', []))
+        questions_in_quiz_dict = {
+             str(q.get('id')): q for q in all_questions if str(q.get('id')) in question_ids_in_quiz
+        }
+
+        # --- Perform Grading ---
+        total_score_achieved = Decimal(0)
+        max_possible_score = Decimal(0)
+        graded_details = [] # Optional detailed results
+
+        for q_id, question_data in questions_in_quiz_dict.items():
+            q_id_str = str(q_id) # Ensure consistency
+            question_score = Decimal(question_data.get('score', 1)) # Use Decimal
+            max_possible_score += question_score # Add to max score for this quiz attempt
+            question_type = question_data.get('type')
+            student_answer = student_answers.get(q_id_str) # Get student's answer for this question
+
+            is_correct = None # None = not auto-graded/applicable, True/False otherwise
+            score_awarded = Decimal(0)
+            needs_manual_review = False
+
+            if student_answer is not None: # Only grade if student provided an answer
+                if question_type == 'MCQ':
+                     correct_option_ids = set(question_data.get('correct_answer', []))
+                     # Student answer for MCQ should be a list of selected option IDs
+                     if isinstance(student_answer, list):
+                          selected_option_ids = set(student_answer)
+                          # Exact match required for correctness (all correct selected, no incorrect selected)
+                          is_correct = (selected_option_ids == correct_option_ids)
+                          if is_correct:
+                               score_awarded = question_score
+                     else:
+                          is_correct = False # Invalid answer format
+
+                elif question_type == 'SHORT_TEXT':
+                     review_mode = question_data.get('short_answer_review_mode', 'manual')
+                     if review_mode == 'auto':
+                          correct_text = question_data.get('short_answer_correct_text')
+                          if correct_text is not None and isinstance(student_answer, str):
+                               # Case-INSENSITIVE comparison after trimming whitespace
+                               is_correct = (student_answer.strip().lower() == correct_text.lower())
+                               if is_correct:
+                                   score_awarded = question_score
+                          else:
+                               is_correct = False # Cannot auto-grade if no correct text stored or invalid student answer
+                     else: # Manual review mode
+                          needs_manual_review = True
+                          is_correct = None # Mark as needing review
+
+                # Add logic for other question types here later
+
+            # Accumulate total score
+            total_score_achieved += score_awarded
+
+            # Store detailed result (optional)
+            graded_details.append({
+                "question_id": q_id_str,
+                "is_correct": is_correct,
+                "score_awarded": float(score_awarded.quantize(Decimal("0.01"), ROUND_HALF_UP)), # Store as float
+                "needs_manual_review": needs_manual_review
+            })
+
+        # Calculate percentage
+        percentage = Decimal(0)
+        if max_possible_score > 0:
+             percentage = (total_score_achieved / max_possible_score) * 100
+             # Round to reasonable precision, e.g., 2 decimal places
+             percentage = percentage.quantize(Decimal("0.01"), ROUND_HALF_UP)
+
+        passed = percentage >= pass_score_threshold
+
+        # --- Prepare Attempt Record ---
+        attempt_id = str(uuid.uuid4())
+        # Convert timestamps if they were milliseconds
+        # start_time_iso = datetime.datetime.fromtimestamp(start_time_ms / 1000).isoformat() if start_time_ms else None
+        # end_time_iso = datetime.datetime.fromtimestamp(end_time_ms / 1000).isoformat() if end_time_ms else datetime.datetime.now().isoformat()
+        # Using simple now() for timestamps for now, as frontend isn't sending them yet fully
+        start_time_iso = submission_data.get('start_time') or datetime.datetime.now(datetime.timezone.utc).isoformat()
+        end_time_iso = submission_data.get('end_time') or datetime.datetime.now(datetime.timezone.utc).isoformat()
+        submitted_due_to_timeout = submission_data.get('submitted_due_to_timeout', False)
+
+
+        new_attempt = {
+            "attempt_id": attempt_id,
+            "quiz_id": str(quiz_id),
+            "quiz_title_at_submission": target_quiz.get('title', 'N/A'),
+            "student_info": student_info,
+            "answers": student_answers, # Store what student submitted
+            "score_achieved": float(total_score_achieved.quantize(Decimal("0.01"), ROUND_HALF_UP)), # Store as float
+            "max_possible_score": float(max_possible_score.quantize(Decimal("0.01"), ROUND_HALF_UP)), # Store as float
+            "percentage": float(percentage), # Store as float
+            "passed": bool(passed),
+            "pass_score_threshold": float(pass_score_threshold), # Store threshold used
+            "start_time": start_time_iso,
+            "end_time": end_time_iso,
+            "submitted_due_to_timeout": submitted_due_to_timeout,
+            "graded_details": graded_details # Store detailed results
+        }
+
+        # --- Save Attempt ---
+        all_attempts = data.get('attempts', [])
+        all_attempts.append(new_attempt)
+        data['attempts'] = all_attempts
+        save_data(data)
+
+        print(f"DEBUG: Stored attempt {attempt_id} for quiz {quiz_id}. Score: {percentage}%") # Log
+
+        # --- Return Feedback ---
+        feedback_payload = {
+            "attempt_id": attempt_id,
+            "score": float(percentage), # Send percentage score
+            "passed": bool(passed),
+            "max_score": float(max_possible_score), # Maybe useful
+            "achieved_score": float(total_score_achieved) # Maybe useful
+            # Optionally include correct answers here based on teacher config later
+        }
+        return JsonResponse(feedback_payload, status=201) # 201 Created
+
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid submission format.'}, status=400)
+    except Exception as e:
+        print(f"Error processing submission for quiz {quiz_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'An unexpected error occurred during submission: {str(e)}'}, status=500)

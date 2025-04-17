@@ -20,4 +20,8 @@ urlpatterns = [
     
     # --- Quiz Access API URL ---
     path('api/quiz/access/', views.quiz_access_api, name='quiz_access'),
+
+    # --- Submission URL ---
+    # POST /api/quizzes/{quiz_id}/submit/
+    path('api/quizzes/<uuid:quiz_id>/submit/', views.quiz_submit_api, name='quiz_submit'),
 ]
