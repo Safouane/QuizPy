@@ -152,217 +152,7 @@
         return `${LOCAL_STORAGE_KEY_PREFIX}${String(quizId)}`;
     }
 
-    // --- Form Submission Handler ---
-    startQuizForm.addEventListener('submit', async function(event) {
-        // Log that the handler has started
-        console.log(">>> DEBUG: Submit event listener entered!");
 
-        // Prevent the browser's default form submission behavior (which causes a page reload/redirect via GET)
-        event.preventDefault();
-        console.log(">>> DEBUG: preventDefault() called.");
-
-        // Clear any previous error messages shown to the user
-        clearMessages();
-        // Disable the submit button and show the spinner to indicate processing
-        setButtonState(true);
-
-        // --- 1. Collect User Input ---
-        // Gather info for Student 1 (always required)
-        const student1Info = {
-            name: student1NameInput.value.trim(),
-            class: student1ClassInput.value.trim(),
-            id: student1IdInput.value.trim()
-        };
-        // Prepare an array to hold student info (will contain 1 or 2 students)
-        const students = [];
-
-        // Validate Student 1's name (basic check)
-        if (!student1Info.name) {
-             showError('Please enter the Full Name for Student 1.');
-             setButtonState(false); // Re-enable button
-             return; // Stop processing
-        }
-        students.push(student1Info); // Add Student 1 to the list
-
-        // Check if the 'taking as a pair' checkbox is checked
-        const isPair = isPairCheckbox.checked;
-        if (isPair) {
-            // If taking as a pair, collect Student 2's info
-            const student2Info = {
-                name: student2NameInput.value.trim(),
-                class: student2ClassInput.value.trim(),
-                id: student2IdInput.value.trim()
-            };
-             // Validate Student 2's name if it's a pair attempt
-             if (!student2Info.name) {
-                showError('Please enter the Full Name for Student 2 when taking as a pair.');
-                setButtonState(false); // Re-enable button
-                return; // Stop processing
-            }
-            students.push(student2Info); // Add Student 2 to the list
-        }
-        console.log("DEBUG: Collected student info:", students);
-
-        // Get the entered quiz key
-        const quizKey = quizKeyInput.value.trim();
-        // Validate quiz key input
-        if (!quizKey) {
-            showError('Please enter the Quiz Key.');
-            setButtonState(false); // Re-enable button
-            return; // Stop processing
-        }
-
-        // --- 2. Validate Key via API-3 & Get Quiz ID / Full Quiz Data ---
-        const accessApiUrl = "{% url 'quiz:quiz_access' %}"; // Django URL tag for the API endpoint
-        const accessPayload = { quiz_key: quizKey };
-        let quizIdFromKey = null;       // Will store the valid quiz ID if found
-        let validationError = null;     // Will store any error message during validation
-        let apiResponseData = null;     // Will store the full successful JSON response from API-3 (contains quiz structure)
-
-        try {
-            console.log("DEBUG: Validating key via API:", quizKey);
-            // Make the asynchronous POST request to the backend API
-            const accessResponse = await fetch(accessApiUrl, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify(accessPayload)
-            });
-
-            // Attempt to parse the JSON response, even if the status code indicates an error
-            try {
-                apiResponseData = await accessResponse.json();
-            } catch (e) {
-                 console.error("Error parsing API validation response:", e);
-                 // If parsing fails on an error response, use a generic message
-                 if (!accessResponse.ok) {
-                    throw new Error(`Received an invalid response from the server (status: ${accessResponse.status}).`);
-                 }
-                 // If parsing fails on a success response, treat data as invalid
-                 apiResponseData = null;
-            }
-
-            // Check if the API call was successful (HTTP status 2xx) AND returned valid data
-            if (accessResponse.ok && apiResponseData && apiResponseData.id) {
-                 quizIdFromKey = apiResponseData.id; // Extract the validated Quiz ID
-                 console.log("DEBUG: Key validation successful. Quiz ID:", quizIdFromKey);
-                 // apiResponseData now holds the full quiz structure needed later
-            } else {
-                 // Construct an error message from the API response or status code
-                 validationError = apiResponseData?.error || `Invalid Quiz Key or Quiz is inactive (${accessResponse.status}).`;
-                 console.log("DEBUG: Key validation failed via API:", validationError);
-            }
-        } catch(error) {
-             // Catch network errors or errors thrown during fetch/parsing
-             console.error("Error during key validation fetch/process:", error);
-             validationError = "An error occurred while validating the key. Check network connection.";
-        }
-
-        // If key validation failed for any reason, show the error to the user and stop
-        if (validationError || !quizIdFromKey || !apiResponseData) {
-             showError(validationError || "Failed to validate quiz key or retrieve quiz data.");
-             setButtonState(false); // Re-enable the button
-             return; // Stop processing
-        }
-
-        // --- 3. Check localStorage for Saved State (Only for Single Students) ---
-        const storageKey = getLocalStorageKeyForQuiz(quizIdFromKey); // e.g., quizState_uuid
-        let savedState = null; // Will hold parsed data from localStorage if relevant
-        let resumeQuiz = false; // Flag to determine if resuming
-
-        if (isPair) {
-            // --- PAIR MODE: Force fresh start, disable resume ---
-            console.log("DEBUG: Taking quiz as pair, forcing fresh start. Clearing any existing localStorage state.");
-            localStorage.removeItem(storageKey); // Clear any old state for this quiz ID
-            resumeQuiz = false;
-        } else {
-            // --- SINGLE STUDENT MODE: Check for potential resume ---
-            let storedStateValue = null;
-            try {
-                 storedStateValue = localStorage.getItem(storageKey);
-                 if (storedStateValue) {
-                      savedState = JSON.parse(storedStateValue);
-                      console.log("DEBUG: Found potentially resumable state in localStorage:", savedState);
-
-                      // Verify if the saved state belongs to the CURRENT student (using name for now)
-                      const savedStudentName = savedState.studentInfo?.name?.trim().toLowerCase();
-                      const currentStudentName = student1Info.name.toLowerCase(); // Compare against Student 1
-
-                      if (savedStudentName && savedStudentName === currentStudentName) {
-                           console.log("DEBUG: Student info matches saved state. Prompting user.");
-                           // Prompt the user to confirm resuming
-                           resumeQuiz = confirm("Resume previous attempt for " + escapeHTML(student1Info.name) + "?");
-                           if (!resumeQuiz) {
-                                // If user declines, clear the saved state for this quiz/student
-                                console.log("DEBUG: User declined resume. Clearing their saved state from localStorage.");
-                                localStorage.removeItem(storageKey);
-                                savedState = null; // Ensure we don't try to use it later
-                           }
-                           // If user confirms, resumeQuiz remains true, savedState remains populated
-                      } else {
-                           // Saved state exists but doesn't belong to this student
-                           console.log(`DEBUG: Saved state found, but student info does not match. Saved: "${savedStudentName}", Current: "${currentStudentName}". Ignoring saved state.`);
-                           savedState = null; // Treat as no valid saved state for this user
-                           resumeQuiz = false;
-                      }
-                 } else {
-                      console.log("DEBUG: No saved state found in localStorage for key:", storageKey);
-                      resumeQuiz = false;
-                 }
-            } catch (e) {
-                 // Handle errors reading or parsing localStorage
-                 console.error("Error reading or parsing saved state from localStorage:", e);
-                 localStorage.removeItem(storageKey); // Clear potentially corrupt data
-                 savedState = null;
-                 resumeQuiz = false;
-            }
-        }
-
-        // --- 4. Set up sessionStorage & Redirect ---
-        try {
-             // ----- Prepare sessionStorage -----
-             // a) Store student info (always the current input, might be array or object)
-             sessionStorage.setItem('quizStudentInfo', JSON.stringify(students));
-             // b) Store other context info
-             sessionStorage.setItem('quizKeyAttempted', quizKey);
-             sessionStorage.setItem('quizIdToTake', quizIdFromKey);
-
-             // c) Store the core quiz data structure (ALWAYS use the fresh data from API-3 response)
-             // This is needed on the quiz taking page regardless of resume/fresh start
-             if (!apiResponseData || !apiResponseData.id) { // Should have been caught earlier, but double-check
-                  throw new Error("Missing valid quiz data received from API.");
-             }
-             sessionStorage.setItem(`quizData_${quizIdFromKey}`, JSON.stringify(apiResponseData));
-             console.log("DEBUG: Stored FRESH quiz structure from API-3 into sessionStorage");
-
-             // d) Handle resume flag
-             if (resumeQuiz) { // Only true if single student AND confirmed resume
-                  // Set the flag for the quiz taking page to check
-                  sessionStorage.setItem(`resumeState_${quizIdFromKey}`, 'true');
-                  console.log("DEBUG: Resume flag set in sessionStorage.");
-                  // Note: The quiz taking page will read the actual answers/time/index directly from localStorage
-             } else {
-                  // Ensure no resume flag is present for fresh starts or pairs
-                  sessionStorage.removeItem(`resumeState_${quizIdFromKey}`);
-                  console.log("DEBUG: Ensured no resume flag in sessionStorage.");
-                  // Note: localStorage was already cleared if user declined their own resume
-             }
-
-             // ----- Redirect -----
-             const redirectUrl = `/quiz/take/${quizIdFromKey}/`; // Construct the URL for the quiz taking page
-             console.log("DEBUG: Redirecting to quiz page:", redirectUrl);
-             window.location.href = redirectUrl; // Perform the redirection
-
-        } catch (error) {
-             // Catch errors related to sessionStorage or other issues before redirect
-             console.error("Error storing session data or during final setup:", error);
-             showError(`Cannot proceed: ${error.message}. Browser session/local storage might be unavailable or failed.`);
-             setButtonState(false); // Re-enable button as redirect failed
-        }
-
-        // Note: No need to call setButtonState(false) on the success path because the page will navigate away.
-
-    }); // End submit listener
-    
     /**
      * Basic HTML escaping function to prevent XSS from dynamic text insertion.
      * Consider a more robust library if handling complex user-generated HTML.
@@ -391,6 +181,261 @@
             // student2IdInput.value = '';
         }
     });
+
+        // --- Form Submission Handler ---
+        startQuizForm.addEventListener('submit', async function(event) {
+        // Log that the handler has started
+        console.log(">>> DEBUG: Submit event listener entered!");
+
+        // Prevent the browser's default form submission behavior (which causes a page reload/redirect via GET)
+        event.preventDefault();
+        console.log(">>> DEBUG: preventDefault() called.");
+
+        // Clear any previous error messages shown to the user
+        clearMessages();
+        // Disable the submit button and show the spinner to indicate processing
+        setButtonState(true);
+
+        // --- 1. Collect User Input ---
+        console.log(">>> LANDING DEBUG: Starting Step 1: Collect User Input");
+        // Gather info for Student 1 (always required)
+        const student1Info = {
+            name: student1NameInput.value.trim(),
+            class: student1ClassInput.value.trim(),
+            id: student1IdInput.value.trim()
+        };
+        // Prepare an array to hold student info (will contain 1 or 2 students)
+        const students = [];
+
+        // Validate Student 1's name (basic check)
+        if (!student1Info.name) {
+             console.error(">>> LANDING DEBUG: Validation Failed - Student 1 Name missing.");
+             showError('Please enter the Full Name for Student 1.');
+             setButtonState(false); // Re-enable button
+             return; // Stop processing
+        }
+        students.push(student1Info); // Add Student 1 to the list
+
+        // Check if the 'taking as a pair' checkbox is checked
+        const isPair = isPairCheckbox.checked;
+        console.log(">>> LANDING DEBUG: Checking 'isPair' flag:", isPair); // LOG isPair value
+        if (isPair) {
+            // If taking as a pair, collect Student 2's info
+             console.log(">>> LANDING DEBUG: Collecting info for Student 2.");
+            const student2Info = {
+                name: student2NameInput.value.trim(),
+                class: student2ClassInput.value.trim(),
+                id: student2IdInput.value.trim()
+            };
+             // Validate Student 2's name if it's a pair attempt
+             if (!student2Info.name) {
+                console.error(">>> LANDING DEBUG: Validation Failed - Student 2 Name missing (Pair Mode).");
+                showError('Please enter the Full Name for Student 2 when taking as a pair.');
+                setButtonState(false); // Re-enable button
+                return; // Stop processing
+            }
+            students.push(student2Info); // Add Student 2 to the list
+        }
+        console.log(">>> LANDING DEBUG: Collected student info array:", students);
+
+        // Get the entered quiz key
+        const quizKey = quizKeyInput.value.trim();
+        // Validate quiz key input
+        if (!quizKey) {
+            console.error(">>> LANDING DEBUG: Validation Failed - Quiz Key missing.");
+            showError('Please enter the Quiz Key.');
+            setButtonState(false); // Re-enable button
+            return; // Stop processing
+        }
+        console.log(">>> LANDING DEBUG: Finished Step 1. Student Info & Key collected.");
+
+        // --- 2. Validate Key via API-3 & Get Quiz ID / Full Quiz Data ---
+        console.log(">>> LANDING DEBUG: Starting Step 2: Validate Key via API");
+        const accessApiUrl = "{% url 'quiz:quiz_access' %}"; // Django URL tag for the API endpoint
+        const accessPayload = { quiz_key: quizKey };
+        let quizIdFromKey = null;       // Will store the valid quiz ID if found
+        let validationError = null;     // Will store any error message during validation
+        let apiResponseData = null;     // Will store the full successful JSON response from API-3
+
+        try {
+            console.log(">>> LANDING DEBUG: Sending request to API:", accessApiUrl, "with payload:", accessPayload);
+            // Make the asynchronous POST request to the backend API
+            const accessResponse = await fetch(accessApiUrl, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify(accessPayload)
+            });
+            console.log(">>> LANDING DEBUG: Received API response status:", accessResponse.status);
+
+            // Attempt to parse the JSON response, even if the status code indicates an error
+            let rawApiResponse = await accessResponse.text(); // Get raw text first for logging
+            console.log(">>> LANDING DEBUG: Raw API response text:", rawApiResponse);
+            try {
+                apiResponseData = JSON.parse(rawApiResponse);
+                console.log(">>> LANDING DEBUG: Parsed API response JSON:", apiResponseData);
+            } catch (e) {
+                 console.error(">>> LANDING DEBUG: Error parsing API validation response:", e);
+                 // If parsing fails on an error response, use a generic message
+                 if (!accessResponse.ok) {
+                    throw new Error(`Received an invalid (non-JSON) response from the server (status: ${accessResponse.status}). Raw: ${rawApiResponse}`);
+                 }
+                 // If parsing fails on a success response, treat data as invalid
+                 apiResponseData = null;
+            }
+
+            // Check if the API call was successful (HTTP status 2xx) AND returned valid data
+            if (accessResponse.ok && apiResponseData && apiResponseData.id) {
+                 quizIdFromKey = apiResponseData.id; // Extract the validated Quiz ID
+                 console.log(">>> LANDING DEBUG: Key validation successful via API. Quiz ID:", quizIdFromKey);
+                 // apiResponseData now holds the full quiz structure needed later
+            } else {
+                 // Construct an error message from the API response or status code
+                 validationError = apiResponseData?.error || `Invalid Quiz Key or Quiz is inactive (${accessResponse.status}).`;
+                 console.log(">>> LANDING DEBUG: Key validation failed via API. Error:", validationError);
+            }
+        } catch(error) {
+             // Catch network errors or errors thrown during fetch/parsing
+             console.error(">>> LANDING DEBUG: Error during key validation fetch/process:", error);
+             validationError = "An error occurred while validating the key. Check network connection.";
+        }
+
+        // If key validation failed for any reason, show the error to the user and stop
+        if (validationError || !quizIdFromKey || !apiResponseData) {
+             console.error(">>> LANDING DEBUG: Stopping process due to key validation failure.");
+             showError(validationError || "Failed to validate quiz key or retrieve quiz data.");
+             setButtonState(false); // Re-enable the button
+             return; // Stop processing
+        }
+        console.log(">>> LANDING DEBUG: Finished Step 2. Key is valid.");
+
+
+        // --- 3. Check localStorage for Saved State (Only for Single Students) ---
+        console.log(">>> LANDING DEBUG: Starting Step 3: Check localStorage");
+        const storageKey = getLocalStorageKeyForQuiz(quizIdFromKey);
+        console.log(">>> LANDING DEBUG: Checking localStorage with key:", storageKey);
+
+        let savedState = null; // Will hold parsed data from localStorage if relevant
+        let resumeQuiz = false; // Flag to determine if resuming
+
+        if (isPair) {
+            // --- PAIR MODE ---
+            console.log(">>> LANDING DEBUG: isPair is true. Forcing fresh start. Clearing any existing localStorage state.");
+            try { localStorage.removeItem(storageKey); } catch(e) { console.error("Failed to remove item from localStorage", e); }
+            resumeQuiz = false;
+        } else {
+            // --- SINGLE STUDENT MODE: Check for potential resume ---
+            console.log(">>> LANDING DEBUG: isPair is false. Checking localStorage for single student resume.");
+            let storedStateValue = null;
+            let parseError = null;
+            try {
+                 storedStateValue = localStorage.getItem(storageKey);
+                 console.log(">>> LANDING DEBUG: Value from localStorage:", storedStateValue);
+                 if (storedStateValue) {
+                      savedState = JSON.parse(storedStateValue);
+                      console.log(">>> LANDING DEBUG: Parsed saved state:", savedState);
+  
+                      // --- CRITICAL CHECK 1 (MODIFIED): Does savedState contain studentInfo ARRAY with at least one student? ---
+                  console.log(">>> LANDING DEBUG: Checking savedState.studentInfo:", savedState.studentInfo);
+                  const savedStudentInfoArray = savedState.studentInfo; // Get the student info array/object
+                  let savedStudentName = null;
+                  // Check if it's an array and has at least one element
+                  if (Array.isArray(savedStudentInfoArray) && savedStudentInfoArray.length > 0) {
+                        // Get the name from the FIRST student object in the saved array
+                        savedStudentName = savedStudentInfoArray[0]?.name?.trim().toLowerCase();
+                  }
+                  // --- END MODIFICATION ---
+  
+                      
+                  
+                  const currentStudentName = student1Info.name.toLowerCase(); // Already trimmed in Step 1
+                      console.log(`>>> LANDING DEBUG: Comparing names - Saved: "${savedStudentName}" vs Current: "${currentStudentName}"`);
+
+
+
+                      // --- CRITICAL CHECK 2: Now compares correctly extracted name ---
+                  if (savedStudentName && savedStudentName === currentStudentName) {
+                       console.log(">>> LANDING DEBUG: Name match! Prompting user.");
+                       resumeQuiz = confirm("Resume previous attempt for " + escapeHTML(student1Info.name) + "?");
+                       console.log(">>> LANDING DEBUG: User response to prompt:", resumeQuiz);
+                       if (!resumeQuiz) {
+                            console.log(">>> LANDING DEBUG: User declined resume. Clearing localStorage.");
+                            localStorage.removeItem(storageKey);
+                            savedState = null;
+                       }
+                  } else {
+                       console.log(`>>> LANDING DEBUG: Name mismatch or missing/invalid saved studentInfo. Ignoring saved state.`);
+                       savedState = null;
+                       resumeQuiz = false;
+                      }
+                 } else {
+                    console.log(">>> LANDING DEBUG: No saved state found in localStorage.");
+                      resumeQuiz = false;
+                 }
+            } catch (e) {
+                 console.error(">>> LANDING DEBUG: Error reading or parsing localStorage state:", e);
+                 try { localStorage.removeItem(storageKey); } catch(e2) { console.error("Failed to remove corrupt item from localStorage", e2); }
+                 savedState = null;
+                 resumeQuiz = false;
+                 parseError = e; // Store error for logging if needed
+            }
+            console.log(">>> LANDING DEBUG: Finished checks for single student resume. Result resumeQuiz:", resumeQuiz);        }
+        console.log(">>> LANDING DEBUG: Finished Step 3.");
+
+
+        // --- 4. Set up sessionStorage & Redirect ---
+        console.log(">>> LANDING DEBUG: Starting Step 4: Setup sessionStorage & Redirect");
+        console.log(">>> LANDING DEBUG: Final decision values - resumeQuiz:", resumeQuiz, "savedState:", savedState);
+        try {
+             // ----- Prepare sessionStorage -----
+             console.log(">>> LANDING DEBUG: Setting sessionStorage items...");
+             // a) Store student info (always the current input, 'students' array)
+             sessionStorage.setItem('quizStudentInfo', JSON.stringify(students));
+             console.log(">>> LANDING DEBUG: Stored quizStudentInfo:", sessionStorage.getItem('quizStudentInfo'));
+             // b) Store other context info
+             sessionStorage.setItem('quizKeyAttempted', quizKey);
+             sessionStorage.setItem('quizIdToTake', quizIdFromKey);
+             console.log(">>> LANDING DEBUG: Stored quizKeyAttempted:", sessionStorage.getItem('quizKeyAttempted'));
+             console.log(">>> LANDING DEBUG: Stored quizIdToTake:", sessionStorage.getItem('quizIdToTake'));
+
+
+             // c) Store the core quiz data structure (ALWAYS use the fresh data from API-3 response)
+             if (!apiResponseData || !apiResponseData.id) { // Re-check apiResponseData validity
+                  console.error(">>> LANDING DEBUG: Missing valid apiResponseData before setting quizData in sessionStorage.");
+                  throw new Error("Missing valid quiz data received from API.");
+             }
+             const coreDataKey = `quizData_${quizIdFromKey}`;
+             sessionStorage.setItem(coreDataKey, JSON.stringify(apiResponseData));
+             console.log(">>> LANDING DEBUG: Stored FRESH quiz structure in sessionStorage key:", coreDataKey);
+             // console.log(">>> LANDING DEBUG: Stored data:", sessionStorage.getItem(coreDataKey)); // Optional: log full data
+
+
+             // d) Handle resume flag
+             const resumeFlagKey = `resumeState_${quizIdFromKey}`;
+             if (resumeQuiz) { // Check final resume decision. No need to check savedState again here.
+                  // Set the flag for the quiz taking page to check
+                  sessionStorage.setItem(resumeFlagKey, 'true');
+                  console.log(">>> LANDING DEBUG: Setting resume flag in sessionStorage (key:", resumeFlagKey, "). Value:", sessionStorage.getItem(resumeFlagKey));
+             } else {
+                  // Ensure no resume flag is present otherwise
+                  sessionStorage.removeItem(resumeFlagKey);
+                  console.log(">>> LANDING DEBUG: Ensured no resume flag in sessionStorage (key:", resumeFlagKey, ").");
+             }
+
+             // ----- Redirect -----
+             const redirectUrl = `/quiz/take/${quizIdFromKey}/`; // Construct the URL
+             console.log(">>> LANDING DEBUG: Redirecting to quiz page:", redirectUrl);
+             window.location.href = redirectUrl; // Perform the redirection
+
+        } catch (error) {
+             // Catch errors related to sessionStorage or other issues before redirect
+             console.error(">>> LANDING DEBUG: Error storing session data or during final setup:", error);
+             showError(`Cannot proceed: ${error.message}. Browser session/local storage might be unavailable or failed.`);
+             setButtonState(false); // Re-enable button as redirect failed
+        }
+
+    }); // End submit listener
+
+</script>
 
 </script>
 {% endblock %}

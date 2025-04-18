@@ -11,6 +11,7 @@ import datetime
 from decimal import Decimal, ROUND_HALF_UP # For accurate score calculation
 import openpyxl # Add import
 from openpyxl.utils import get_column_letter # Optional: For setting column widths
+import copy
 
 
 # Import the decorator we created in AUTH-3
@@ -32,9 +33,22 @@ def quiz_list_create_api(request):
     quizzes = data.get('quizzes', [])
 
     if request.method == 'GET':
-        # Return the list of all quizzes
-        # Optionally filter out sensitive info if needed in the future
-        return JsonResponse({'quizzes': quizzes})
+        # Prepare data for response, ensuring no sets are included
+        response_quizzes = []
+        for quiz_data in quizzes:
+            # Create a copy to modify without affecting original data if needed
+            prepared_quiz = quiz_data.copy()
+            # Explicitly convert potential sets within the quiz to lists
+            if isinstance(prepared_quiz.get('questions'), set):
+                 prepared_quiz['questions'] = list(prepared_quiz['questions'])
+            # Check other potential set fields within config if applicable
+            # Example: if 'allowed_groups' in prepared_quiz.get('config', {}) and isinstance(prepared_quiz['config']['allowed_groups'], set):
+            #     prepared_quiz['config']['allowed_groups'] = list(prepared_quiz['config']['allowed_groups'])
+            response_quizzes.append(prepared_quiz)
+
+        print(f"DEBUG: Returning quiz list. Count: {len(response_quizzes)}")
+        # Return the cleaned list
+        return JsonResponse({'quizzes': response_quizzes})
 
     elif request.method == 'POST':
         try:
@@ -93,6 +107,9 @@ def quiz_list_create_api(request):
             return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
         
 
+# quiz/views.py
+# ... (other imports: json, uuid, JsonResponse, decorators, load_data, save_data, Decimal etc.) ...
+
 @csrf_exempt
 @api_teacher_required
 @require_http_methods(["GET", "PUT", "DELETE"])
@@ -101,6 +118,10 @@ def quiz_detail_api(request, quiz_id):
     API endpoint for retrieving (GET), updating (PUT), or deleting (DELETE)
     a specific quiz by its ID. Requires teacher authentication. Uses JSON storage.
     """
+    # Ensure quiz_id is string for consistent comparison later if needed elsewhere
+    quiz_id_str = str(quiz_id)
+    print(f"DEBUG [Detail API]: Request for Quiz ID: {quiz_id_str}, Method: {request.method}")
+
     data = load_data()
     quizzes = data.get('quizzes', [])
     quiz = None
@@ -108,115 +129,169 @@ def quiz_detail_api(request, quiz_id):
 
     # Find the quiz by ID
     for index, q in enumerate(quizzes):
-        if q.get('id') == str(quiz_id): # Compare as strings if quiz_id is int/uuid
+        # Compare as strings for safety, even though URL converter gives UUID object
+        if str(q.get('id')) == quiz_id_str:
             quiz = q
             quiz_index = index
             break
 
     if quiz is None:
-        return JsonResponse({'error': f'Quiz with ID {quiz_id} not found.'}, status=404)
+        print(f"DEBUG [Detail API]: Quiz ID {quiz_id_str} not found.")
+        return JsonResponse({'error': f'Quiz with ID {quiz_id_str} not found.'}, status=404)
 
     # --- GET Request ---
     if request.method == 'GET':
-        return JsonResponse({'quiz': quiz})
+        # Prepare the quiz data for response, ensuring no sets
+        prepared_quiz = copy.deepcopy(quiz) # Work on a deep copy
+
+        # Convert potential sets to lists before returning JSON
+        if isinstance(prepared_quiz.get('questions'), set):
+            print(f"DEBUG [GET Detail]: Converting 'questions' set to list for quiz {quiz_id_str}")
+            prepared_quiz['questions'] = list(prepared_quiz['questions'])
+
+        if isinstance(prepared_quiz.get('config'), dict):
+             for k, v in prepared_quiz['config'].items():
+                  if isinstance(v, set):
+                       print(f"DEBUG [GET Detail]: Converting config key '{k}' set to list for quiz {quiz_id_str}")
+                       prepared_quiz['config'][k] = list(v)
+        # Add checks for other fields if necessary
+
+        print(f"DEBUG [GET Detail]: Returning quiz detail for ID: {quiz_id_str}")
+        return JsonResponse({'quiz': prepared_quiz}) # Return the cleaned quiz object
 
     # --- PUT Request (Update) ---
     elif request.method == 'PUT':
+        print(f"DEBUG [PUT Detail]: Processing update for quiz ID: {quiz_id_str}")
         try:
             request_data = json.loads(request.body)
+            print(f"DEBUG [PUT Detail]: Received payload: {request_data}")
 
+            # Work on a copy of the quiz data found
+            updated_quiz = copy.deepcopy(quiz)
 
-            # Update allowed fields
-            if 'title' in request_data: quiz['title'] = request_data['title']
-            if 'description' in request_data: quiz['description'] = request_data.get('description', quiz.get('description', ''))
-            if 'config' in request_data: quiz['config'] = {**quiz.get('config', {}), **request_data['config']}
-            if 'archived' in request_data: quiz['archived'] = bool(request_data['archived'])
-            
-            # --- ADDED: Update questions list ---
-            if 'questions' in request_data:
-            # Basic validation: Ensure it's a list of strings (or can be converted)
-                try:
-                    quiz['questions'] = [str(q_id) for q_id in request_data['questions']]
-                except (TypeError, ValueError):
-                    return JsonResponse({'error': 'Invalid format for questions list.'}, status=400)
-            # --- END ADD ---
+            # Update allowed fields (only update fields present in request_data)
+            if 'title' in request_data:
+                updated_quiz['title'] = request_data['title']
+            if 'description' in request_data:
+                # Use get for optional field description, provide original as default
+                updated_quiz['description'] = request_data.get('description', quiz.get('description', ''))
 
+            # --- Update Configuration Block ---
             if 'config' in request_data:
-                new_config = request_data['config']
-                # Get existing config or default to empty dict
-                current_config = quiz.get('config', {})
+                print("DEBUG [PUT Detail]: Updating config block...")
+                new_config_data = request_data['config']
+                if not isinstance(new_config_data, dict):
+                     print(f"ERROR [PUT Detail]: Invalid config data type received: {type(new_config_data)}")
+                     return JsonResponse({'error': 'Invalid format for config data (must be an object).'}, status=400)
 
-                # Validate and update specific config fields
-                # Duration (Allow null or positive integer)
-                duration = new_config.get('duration', current_config.get('duration')) # Keep old if not provided
-                if duration is not None:
-                    try:
-                         duration = int(duration)
-                         if duration < 0: duration = None # Allow only non-negative or null
-                    except (ValueError, TypeError):
-                         duration = None # Reset if invalid type/value
-                current_config['duration'] = duration
+                # --- Defensive handling for current_config ---
+                current_config_raw = updated_quiz.get('config') # Get raw value from current quiz data
+                if isinstance(current_config_raw, dict):
+                     current_config = copy.deepcopy(current_config_raw) # Work on a copy if it's already a dict
+                     print("DEBUG [PUT Detail]: Copied existing config.")
+                else:
+                     # If it's missing, None, or not a dict, start fresh
+                     print(f"DEBUG [PUT Detail]: Existing config invalid or missing (type: {type(current_config_raw)}). Initializing empty config.")
+                     current_config = {}
+                # --- current_config is now guaranteed to be a dictionary ---
 
-                # Pass Score (Allow number between 0 and 100)
-                pass_score = new_config.get('pass_score', current_config.get('pass_score', 70)) # Keep old or default
-                try:
-                    pass_score = float(pass_score)
-                    if not (0 <= pass_score <= 100):
-                         pass_score = 70 # Reset to default if out of range
-                except (ValueError, TypeError):
-                    pass_score = 70 # Reset if invalid
-                current_config['pass_score'] = pass_score
+                # Validate and update specific config fields from new_config_data
+                # Duration
+                if 'duration' in new_config_data:
+                    duration = new_config_data['duration']
+                    if duration is not None:
+                        try: duration = int(duration); current_config['duration'] = duration if duration >= 0 else None
+                        except (ValueError, TypeError): current_config['duration'] = None # Reset if invalid
+                    else: current_config['duration'] = None # Allow setting to null
+
+                # Pass Score
+                if 'pass_score' in new_config_data:
+                    pass_score = new_config_data['pass_score']
+                    try: pass_score = float(pass_score); current_config['pass_score'] = pass_score if 0 <= pass_score <= 100 else 70
+                    except (ValueError, TypeError): current_config['pass_score'] = 70 # Default
 
                 # Presentation Mode
-                presentation_mode = new_config.get('presentation_mode', current_config.get('presentation_mode', 'all'))
-                if presentation_mode not in ['all', 'one-by-one']:
-                    presentation_mode = 'all' # Default if invalid
-                current_config['presentation_mode'] = presentation_mode
+                if 'presentation_mode' in new_config_data:
+                    presentation_mode = new_config_data['presentation_mode']
+                    current_config['presentation_mode'] = presentation_mode if presentation_mode in ['all', 'one-by-one'] else 'all'
 
-                # Allow Back Navigation (Boolean)
-                allow_back = new_config.get('allow_back', current_config.get('allow_back', True))
-                current_config['allow_back'] = bool(allow_back) # Ensure boolean
+                # Allow Back
+                if 'allow_back' in new_config_data:
+                    current_config['allow_back'] = bool(new_config_data['allow_back'])
 
-                # Randomize Question Order (Boolean)
-                randomize_questions = new_config.get('randomize_questions', current_config.get('randomize_questions', False)) # Default false
-                current_config['randomize_questions'] = bool(randomize_questions) # Ensure boolean
+                # Randomize Questions
+                if 'randomize_questions' in new_config_data:
+                    current_config['randomize_questions'] = bool(new_config_data['randomize_questions'])
 
-                # Shuffle Answer Options (Boolean)
-                shuffle_answers = new_config.get('shuffle_answers', current_config.get('shuffle_answers', False)) # Default false
-                current_config['shuffle_answers'] = bool(shuffle_answers) # Ensure boolean
-                
-                # Assign the updated config back
-                quiz['config'] = current_config
+                # Shuffle Answers
+                if 'shuffle_answers' in new_config_data:
+                    current_config['shuffle_answers'] = bool(new_config_data['shuffle_answers'])
 
-            if 'archived' in request_data: quiz['archived'] = bool(request_data['archived'])
+                # Assign the validated & updated config block back
+                updated_quiz['config'] = current_config
+                print(f"DEBUG [PUT Detail]: Updated config block: {current_config}")
 
-            # Replace the old quiz dict with the updated one in the list
-            quizzes[quiz_index] = quiz
+
+            # --- Update Questions List ---
+            if 'questions' in request_data:
+                print("DEBUG [PUT Detail]: Updating questions list...")
+                # Basic validation: Ensure it's a list of strings (or can be converted)
+                try:
+                    # Ensure all items are strings (like UUIDs)
+                    updated_questions_list = [str(q_id) for q_id in request_data['questions']]
+                    updated_quiz['questions'] = updated_questions_list
+                    print(f"DEBUG [PUT Detail]: Set questions list to: {updated_questions_list}")
+                except (TypeError, ValueError) as e:
+                     print(f"ERROR [PUT Detail]: Invalid questions list format: {request_data['questions']}. Error: {e}")
+                     return JsonResponse({'error': 'Invalid format for questions list (must be a list of strings).'}, status=400)
+
+            # --- Update Archived Status ---
+            if 'archived' in request_data:
+                 updated_quiz['archived'] = bool(request_data['archived'])
+
+
+            # Replace the old quiz dict with the updated one in the main list
+            quizzes[quiz_index] = updated_quiz
             data['quizzes'] = quizzes
-            save_data(data) # Save changes back to JSON
+            save_data(data) # Save changes back to JSON store (mocked in test)
+            print(f"DEBUG [PUT Detail]: Quiz {quiz_id_str} saved successfully.")
 
-            return JsonResponse({'message': 'Quiz updated successfully.', 'quiz': quiz})
+            # --- Prepare response data (convert sets just in case) ---
+            response_quiz = copy.deepcopy(updated_quiz)
+            if isinstance(response_quiz.get('questions'), set):
+                response_quiz['questions'] = list(response_quiz['questions'])
+            if isinstance(response_quiz.get('config'), dict):
+                for k, v in response_quiz['config'].items():
+                    if isinstance(v, set): response_quiz['config'][k] = list(v)
+
+            return JsonResponse({'message': 'Quiz updated successfully.', 'quiz': response_quiz})
 
         except json.JSONDecodeError:
+            print(f"ERROR [PUT Detail]: Invalid JSON format in request body for quiz {quiz_id_str}")
             return JsonResponse({'error': 'Invalid JSON format in request body.'}, status=400)
         except Exception as e:
-             print(f"Error updating quiz {quiz_id}: {e}") # Basic logging
+             print(f"ERROR [PUT Detail]: Unexpected error updating quiz {quiz_id_str}: {e}")
+             import traceback
+             traceback.print_exc() # Print full traceback to server log
              return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+
 
     # --- DELETE Request ---
     elif request.method == 'DELETE':
+        print(f"DEBUG [DELETE Detail]: Processing delete for quiz ID: {quiz_id_str}")
         try:
             # Remove the quiz from the list
-            deleted_quiz_title = quizzes.pop(quiz_index).get('title', 'N/A')
-            data['quizzes'] = quizzes
+            deleted_quiz = quizzes.pop(quiz_index) # Use pop on the original list
+            deleted_quiz_title = deleted_quiz.get('title', 'N/A')
+            data['quizzes'] = quizzes # Assign the modified list back
             save_data(data) # Save changes
+            print(f"DEBUG [DELETE Detail]: Quiz {quiz_id_str} deleted successfully.")
 
-            # Note: Deleting a quiz might require deleting associated questions later,
-            # or handling orphaned questions. For now, just remove the quiz entry.
-
-            return JsonResponse({'message': f'Quiz "{deleted_quiz_title}" (ID: {quiz_id}) deleted successfully.'})
+            return JsonResponse({'message': f'Quiz "{deleted_quiz_title}" (ID: {quiz_id_str}) deleted successfully.'})
         except Exception as e:
-             print(f"Error deleting quiz {quiz_id}: {e}") # Basic logging
+             print(f"ERROR [DELETE Detail]: Unexpected error deleting quiz {quiz_id_str}: {e}")
+             import traceback
+             traceback.print_exc()
              return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
         
 @csrf_exempt
@@ -1049,6 +1124,7 @@ def get_quiz_attempts_api(request, quiz_id):
         print(f"Error fetching attempts for quiz {quiz_id}: {e}")
         import traceback
         traceback.print_exc()
+        print(f"DEBUG: Returning {len(summarized_attempts)} attempt summaries for quiz {quiz_id}")
         return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
     
 def _get_attempts_for_quiz(quiz_id_to_find):
