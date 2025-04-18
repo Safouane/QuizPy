@@ -830,44 +830,51 @@ def quiz_submit_api(request, quiz_id):
         print(f"DEBUG: Received submission for quiz_id: {quiz_id}") # Log
 
         # --- Extract data from submission ---
-        student_info = submission_data.get('student_info')
-        student_answers = submission_data.get('answers') # { question_id: answer }
-        # Timestamps likely sent as JS Date.now() milliseconds - convert if needed
-        # start_time_ms = submission_data.get('start_time')
-        # end_time_ms = submission_data.get('end_time')
-        # submitted_due_to_timeout = submission_data.get('submitted_due_to_timeout', False)
+        student_info_input = submission_data.get('student_info') # <<< Use a temporary input variable name
+        student_answers = submission_data.get('answers')
+        start_time_iso = submission_data.get('start_time') or datetime.datetime.now(datetime.timezone.utc).isoformat()
+        end_time_iso = submission_data.get('end_time') or datetime.datetime.now(datetime.timezone.utc).isoformat()
+        submitted_due_to_timeout = submission_data.get('submitted_due_to_timeout', False)
 
-        # Basic validation
-        if not student_info or not isinstance(student_info, dict) or not student_info.get('name'):
-             return JsonResponse({'error': 'Missing or invalid student information.'}, status=400)
+        # --- Validate and Process Student Info ---
+        is_valid_student_data = False
+        if isinstance(student_info_input, list) and len(student_info_input) > 0:
+            # Check if all items in list are dicts with at least a name
+            if all(isinstance(s, dict) and s.get('name', '').strip() for s in student_info_input): # Ensure name isn't empty string
+                    processed_student_list = student_info_input # Assign the list directly
+                    is_valid_student_data = True
+        elif isinstance(student_info_input, dict) and student_info_input.get('name', '').strip():
+            # Allow single dict, convert to list
+                processed_student_list = [student_info_input] # Convert single student to list
+                is_valid_student_data = True
+
+        if not is_valid_student_data:
+                return JsonResponse({'error': 'Missing or invalid student information (Name is required).'}, status=400)
+        # --- End Student Info Validation ---
+
         if not student_answers or not isinstance(student_answers, dict):
-             return JsonResponse({'error': 'Missing or invalid answers data.'}, status=400)
-
+                return JsonResponse({'error': 'Missing or invalid answers data.'}, status=400)
+        
+        
+        
         # --- Load Quiz and Question Data ---
         data = load_data()
         all_quizzes = data.get('quizzes', [])
         all_questions = data.get('questions', [])
         target_quiz = None
-
         for q in all_quizzes:
-             if str(q.get('id')) == str(quiz_id):
-                  target_quiz = q
-                  break
-
-        if target_quiz is None:
-             return JsonResponse({'error': 'Quiz not found.'}, status=404)
-        # Should not happen if access key was validated, but good check
-        if target_quiz.get('archived'):
-             return JsonResponse({'error': 'Cannot submit to an archived quiz.'}, status=403)
+                if str(q.get('id')) == str(quiz_id):
+                    target_quiz = q
+                    break
+        if target_quiz is None: return JsonResponse({'error': 'Quiz not found.'}, status=404)
+        if target_quiz.get('archived'): return JsonResponse({'error': 'Cannot submit to an archived quiz.'}, status=403)
 
         quiz_config = target_quiz.get('config', {})
-        pass_score_threshold = Decimal(quiz_config.get('pass_score', 70)) # Use Decimal
+        pass_score_threshold = Decimal(quiz_config.get('pass_score', 70))
 
-        # Get relevant questions for this quiz
         question_ids_in_quiz = set(target_quiz.get('questions', []))
-        questions_in_quiz_dict = {
-             str(q.get('id')): q for q in all_questions if str(q.get('id')) in question_ids_in_quiz
-        }
+        questions_in_quiz_dict = { str(q.get('id')): q for q in all_questions if str(q.get('id')) in question_ids_in_quiz }
+    
 
         # --- Perform Grading ---
         total_score_achieved = Decimal(0)
@@ -884,6 +891,10 @@ def quiz_submit_api(request, quiz_id):
             is_correct = None # None = not auto-graded/applicable, True/False otherwise
             score_awarded = Decimal(0)
             needs_manual_review = False
+            # ... (MCQ / SHORT_TEXT grading) ...
+            # total_score_achieved += score_awarded
+            # graded_details.append({ # ... graded details ... })
+
 
             if student_answer is not None: # Only grade if student provided an answer
                 if question_type == 'MCQ':
@@ -935,6 +946,8 @@ def quiz_submit_api(request, quiz_id):
 
         passed = percentage >= pass_score_threshold
 
+        
+        
         # --- Prepare Attempt Record ---
         attempt_id = str(uuid.uuid4())
         # Convert timestamps if they were milliseconds
@@ -950,17 +963,17 @@ def quiz_submit_api(request, quiz_id):
             "attempt_id": attempt_id,
             "quiz_id": str(quiz_id),
             "quiz_title_at_submission": target_quiz.get('title', 'N/A'),
-            "student_info": student_info,
-            "answers": student_answers, # Store what student submitted
-            "score_achieved": float(total_score_achieved.quantize(Decimal("0.01"), ROUND_HALF_UP)), # Store as float
-            "max_possible_score": float(max_possible_score.quantize(Decimal("0.01"), ROUND_HALF_UP)), # Store as float
-            "percentage": float(percentage), # Store as float
+            "students": processed_student_list, # <<< Use the reliably assigned list variable
+            "answers": student_answers,
+            "score_achieved": float(total_score_achieved.quantize(Decimal("0.01"), ROUND_HALF_UP)),
+            "max_possible_score": float(max_possible_score.quantize(Decimal("0.01"), ROUND_HALF_UP)),
+            "percentage": float(percentage),
             "passed": bool(passed),
-            "pass_score_threshold": float(pass_score_threshold), # Store threshold used
+            "pass_score_threshold": float(pass_score_threshold),
             "start_time": start_time_iso,
             "end_time": end_time_iso,
             "submitted_due_to_timeout": submitted_due_to_timeout,
-            "graded_details": graded_details # Store detailed results
+            "graded_details": graded_details
         }
 
         # --- Save Attempt ---
@@ -968,19 +981,18 @@ def quiz_submit_api(request, quiz_id):
         all_attempts.append(new_attempt)
         data['attempts'] = all_attempts
         save_data(data)
-
-        print(f"DEBUG: Stored attempt {attempt_id} for quiz {quiz_id}. Score: {percentage}%") # Log
-
+        print(f"DEBUG: Stored attempt {attempt_id} for quiz {quiz_id}. Score: {percentage}%")
+    
+    
         # --- Return Feedback ---
         feedback_payload = {
             "attempt_id": attempt_id,
-            "score": float(percentage), # Send percentage score
+            "score": float(percentage),
             "passed": bool(passed),
-            "max_score": float(max_possible_score), # Maybe useful
-            "achieved_score": float(total_score_achieved) # Maybe useful
-            # Optionally include correct answers here based on teacher config later
+            "max_score": float(max_possible_score),
+            "achieved_score": float(total_score_achieved)
         }
-        return JsonResponse(feedback_payload, status=201) # 201 Created
+        return JsonResponse(feedback_payload, status=201)
 
     except json.JSONDecodeError:
         return JsonResponse({'error': 'Invalid submission format.'}, status=400)
@@ -988,8 +1000,8 @@ def quiz_submit_api(request, quiz_id):
         print(f"Error processing submission for quiz {quiz_id}: {e}")
         import traceback
         traceback.print_exc()
+        # Return the specific Python error message to help debugging
         return JsonResponse({'error': f'An unexpected error occurred during submission: {str(e)}'}, status=500)
-    
 
 # quiz/views.py
 # ... existing imports ...

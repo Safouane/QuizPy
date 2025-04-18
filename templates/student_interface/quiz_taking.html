@@ -170,133 +170,215 @@
     // --- End of Event Listeners Section ---
 
     // --- Core Functions ---
-
     /**
-     * Initializes the quiz page. Loads core data from sessionStorage, checks for resume state,
-     * applies saved state from localStorage if resuming, sets up the UI, timer, and auto-save.
+     * Initializes the entire quiz taking interface upon page load.
+     * - Loads core quiz structure (questions, config, title) from sessionStorage.
+     * - Loads student information from sessionStorage.
+     * - Checks for a resume flag in sessionStorage.
+     * - If resuming, loads the saved state (answers, index, time) from localStorage.
+     * - Initializes state variables (answers, current index, timer).
+     * - Renders the questions into the DOM.
+     * - Restores saved/resumed answers into the form inputs.
+     * - Updates the progress bar.
+     * - Sets up and starts the timer if applicable.
+     * - Calculates the quiz start time (for submission).
+     * - Shows the appropriate questions based on presentation mode.
+     * - Starts the periodic auto-save interval.
+     * - Handles errors during initialization.
      */
-    function initializeQuiz() {
-        console.log("Initializing quiz for ID:", quizId);
+     function initializeQuiz() {
+        console.log("Initializing quiz for ID:", quizId); // Log start with Quiz ID from template context
         try {
-            // --- Load Core Quiz Structure (ALWAYS from sessionStorage) ---
+            // --- 1. Load Core Quiz Structure (Always required, from API-3 via STU-1) ---
+            console.log("DEBUG: Attempting to load core quiz structure from sessionStorage key:", `quizData_${quizId}`);
             const coreQuizDataString = sessionStorage.getItem(`quizData_${quizId}`);
             if (!coreQuizDataString) {
-                throw new Error(`Core quiz data (quizData_${quizId}) not found in session storage. Please start the quiz again.`);
+                // If this fails, the user likely didn't come through the start page correctly.
+                throw new Error(`Core quiz data (quizData_${quizId}) not found in session storage. Please start the quiz again via the entry page.`);
             }
-            quizData = JSON.parse(coreQuizDataString); // This holds questions, config, title etc.
+            // Parse the JSON string into the global quizData object
+            quizData = JSON.parse(coreQuizDataString);
             console.log("DEBUG: Loaded CORE quiz structure from sessionStorage:", quizData);
 
-             // Validate the core structure first
+            // --- 2. Validate Core Quiz Structure ---
+            // Perform basic checks to ensure the loaded data is usable.
+            if (!quizData || typeof quizData !== 'object') {
+                 throw new Error("Invalid core quiz data loaded (not an object).");
+            }
              if (!quizData.id || !quizData.title || !Array.isArray(quizData.questions)) {
+                 console.error("DEBUG: Invalid quizData structure:", quizData);
                  throw new Error("Loaded core quiz data structure is invalid (missing id, title, or questions array).");
              }
+             // Also specifically check if questions is actually an array (JSON parse sometimes yields objects unexpectedly)
              if (!Array.isArray(quizData.questions)) {
+                 console.error("DEBUG: quizData.questions is not an array:", quizData.questions);
                  throw new Error("Loaded core quiz data 'questions' field is not an array.");
              }
              console.log("DEBUG: Core quiz data validated. Number of questions:", quizData.questions.length);
 
 
-            // --- Check for Resume Flag (from sessionStorage) ---
+            // --- 3. Check for Resume State ---
+            // See if the landing page set a flag indicating we should resume from localStorage.
             const resumeFlagKey = `resumeState_${quizId}`;
             const isResuming = sessionStorage.getItem(resumeFlagKey) === 'true';
             console.log("DEBUG: isResuming:", isResuming);
-
-            // Clean up resume flag immediately after checking
+            // Clean up the flag immediately after checking it, regardless of whether we resume.
             sessionStorage.removeItem(resumeFlagKey);
 
 
-            // --- Load Student Info (from sessionStorage) ---
+            // --- 4. Load Student Info (Always required, from STU-1) ---
+            console.log("DEBUG: Attempting to load student info from sessionStorage key: quizStudentInfo");
             const storedStudentInfo = sessionStorage.getItem('quizStudentInfo');
              if (!storedStudentInfo) {
-                 throw new Error("Student info not found in session storage.");
+                 // This shouldn't happen if STU-1 worked, but good to check.
+                 throw new Error("Student info not found in session storage. Please start the quiz again.");
              }
+             // Parse and store in the global state variable. Could be an object or an array (for pairs).
              studentInfo = JSON.parse(storedStudentInfo);
+             console.log("DEBUG: Parsed student info from sessionStorage:", studentInfo);
 
 
-            // --- Apply Saved State (from localStorage) OR Initialize Fresh State ---
-            let savedState = null; // Holds data from localStorage if resuming
-            let remainingTimeSeconds = null; // Time to start timer with
+            // --- 5. Apply Saved State (from localStorage if resuming) OR Initialize Fresh State ---
+            let savedState = null;          // Holds parsed data from localStorage if resuming
+            let remainingTimeSeconds = null;// Time to start timer with (null for fresh start)
 
             if (isResuming) {
-                console.log("DEBUG: Attempting to load saved state from localStorage.");
+                console.log("DEBUG: Resume required. Attempting to load saved state from localStorage.");
                 const storageKey = getLocalStorageKey(); // e.g., quizState_quizId
                 const storedStateValue = localStorage.getItem(storageKey);
                 if (storedStateValue) {
                     try {
                         savedState = JSON.parse(storedStateValue);
                         console.log("DEBUG: Parsed saved state from localStorage:", savedState);
-                        // Apply saved state (only answers, index, time matter here)
-                        studentAnswers = savedState.answers || {};
-                        currentQuestionIndex = savedState.currentQuestionIndex || 0;
-                        remainingTimeSeconds = savedState.remainingTimeSeconds; // Get saved time
-                        // Safety check: Ensure index is within bounds of loaded questions
+
+                        // Apply saved state values to global state variables
+                        studentAnswers = savedState.answers || {}; // Restore answers or default to empty
+                        currentQuestionIndex = savedState.currentQuestionIndex || 0; // Restore index or default to 0
+                        remainingTimeSeconds = savedState.remainingTimeSeconds; // Restore remaining time (could be null if not timed)
+
+                        // Optional: Validate student info in saved state matches current studentInfo?
+                        // This adds complexity but ensures the correct student is resuming.
+                        // const savedName = savedState.studentInfo?.name?.trim().toLowerCase();
+                        // const currentName = (Array.isArray(studentInfo) ? studentInfo[0]?.name : studentInfo?.name)?.trim().toLowerCase();
+                        // if (!savedName || !currentName || savedName !== currentName) {
+                        //    console.warn("Resuming state student mismatch! Saved:", savedName, "Current:", currentName, ". Resetting state.");
+                        //    studentAnswers = {}; currentQuestionIndex = 0; remainingTimeSeconds = null; savedState = null; isResuming = false;
+                        // }
+
+                        // Safety check: Ensure restored index is valid for the loaded questions
                         if (currentQuestionIndex >= quizData.questions.length || currentQuestionIndex < 0) {
-                            console.warn("Saved question index out of bounds, resetting to 0.");
+                            console.warn(`Saved question index ${currentQuestionIndex} out of bounds (0-${quizData.questions.length - 1}), resetting to 0.`);
                             currentQuestionIndex = 0;
                         }
+                        console.log("DEBUG: Applied state from localStorage: Index=", currentQuestionIndex, "RemainingSecs=", remainingTimeSeconds);
+
                     } catch (e) {
+                         // Handle error parsing localStorage data - treat as fresh start
                          console.error("Error parsing saved state from localStorage, starting fresh state.", e);
+                         localStorage.removeItem(storageKey); // Clear corrupt data
                          studentAnswers = {};
                          currentQuestionIndex = 0;
+                         savedState = null; // Ensure savedState is null if parse failed
+                         isResuming = false; // Treat as non-resuming now
                     }
                 } else {
+                     // Resume flag was set, but no data found in localStorage. Strange, but treat as fresh start.
                      console.warn("DEBUG: Resume flag set, but no saved state found in localStorage. Starting fresh state.");
                      studentAnswers = {};
                      currentQuestionIndex = 0;
+                     isResuming = false; // Correct the flag
                 }
             } else {
+                // Not resuming, this is a fresh start
                 console.log("DEBUG: Starting fresh quiz state.");
                 studentAnswers = {}; // Initialize empty answers
                 currentQuestionIndex = 0;
-                // remainingTimeSeconds remains null for fresh start timer setup
+                // remainingTimeSeconds remains null
             }
 
 
-            // --- Set Configuration (from FRESH quizData loaded earlier) ---
+            // --- 6. Set Configuration (From the fresh quizData loaded from sessionStorage) ---
             presentationMode = quizData.config?.presentation_mode || 'all';
             allowBack = quizData.config?.allow_back !== undefined ? quizData.config.allow_back : true;
+            console.log(`DEBUG: Config set: presentationMode=${presentationMode}, allowBack=${allowBack}`);
 
 
-            // --- Setup UI (common for resume/fresh) ---
+            // --- 7. Setup UI Elements ---
+            console.log("DEBUG: Setting up UI elements.");
+            // Set Quiz Title
             quizTitleH4.textContent = quizData.title || 'Quiz';
-            studentInfoDisplayDiv.textContent = `Student: ${escapeHTML(studentInfo.name || 'N/A')}`;
-            renderQuestions();      // Render based on quizData.questions (which is now correctly populated)
-            restoreAnswersUI();     // Populate UI with studentAnswers (empty for fresh, loaded for resume)
-            updateProgress();       // Set initial progress based on currentQuestionIndex
-            setupTimer(remainingTimeSeconds); // Pass remaining time (null for fresh start)
-            quizStartTime = isResuming ? (savedState?.lastSaved ? determineOriginalStartTime(savedState) : Date.now()) : Date.now(); // Estimate start time
 
+            // Set Student Name(s) Display
+            let nameDisplay = "Unknown";
+            if (Array.isArray(studentInfo) && studentInfo.length > 0) {
+                 nameDisplay = studentInfo.map(s => escapeHTML(s?.name || 'N/A')).join(' & ');
+            } else if (typeof studentInfo === 'object' && studentInfo && studentInfo.name) {
+                 nameDisplay = escapeHTML(studentInfo.name);
+            } else {
+                 console.warn("DEBUG: Student info structure unexpected:", studentInfo);
+            }
+            studentInfoDisplayDiv.textContent = `Student(s): ${nameDisplay}`;
+
+            // Render the HTML structure for all questions into the question area
+            renderQuestions();
+            // Populate the rendered inputs with any loaded/resumed answers
+            restoreAnswersUI();
+            // Set the initial state of the progress bar and text
+            updateProgress();
+            // Set up and start the timer (using null or remainingTimeSeconds)
+            setupTimer(remainingTimeSeconds);
+            // Estimate the original start time (less critical, used for final payload)
+            quizStartTime = isResuming ? (savedState?.lastSaved ? determineOriginalStartTime(savedState) : Date.now()) : Date.now();
+            console.log("DEBUG: Estimated quizStartTime:", new Date(quizStartTime));
+
+            // Hide loading spinner and show the main quiz content
             quizLoadingDiv.classList.add('d-none');
             quizContainerDiv.classList.remove('d-none');
 
-            // Start periodic auto-save (needs quizData to be set)
-            if (autoSaveInterval) clearInterval(autoSaveInterval);
-            autoSaveInterval = setInterval(saveQuizState, 30 * 1000); // Save every 30 seconds
 
-            // Display first question or all questions
+            // --- 8. Start Auto-Save Interval ---
+            // Ensure any previous interval is cleared before starting a new one
+            if (autoSaveInterval) clearInterval(autoSaveInterval);
+            // Start saving state periodically (e.g., every 30 seconds)
+            autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
+            console.log("DEBUG: Auto-save interval started.");
+
+
+            // --- 9. Display Initial Question(s) and Buttons ---
             if (presentationMode === 'one-by-one') {
-                showQuestion(currentQuestionIndex); // Show the correct starting question
+                // Show only the question at the current index (could be 0 or resumed index)
+                showQuestion(currentQuestionIndex);
+                // Set the initial state of navigation buttons
                 updateNavigationButtons();
             } else { // 'all' mode
+                // Show all question cards at once
                 showAllQuestions();
+                // Set the initial state of navigation buttons for 'all' mode
                 prevButton.style.display = 'none';
                 nextButton.style.display = 'none';
-                submitButton.style.display = 'block';
-                 // Ensure submit button is enabled initially in 'all' mode
-                 submitButton.disabled = false;
+                 // Enable submit unless submission is already in progress (unlikely here) or no questions
+                 if (submitButton) {
+                    submitButton.style.display = 'inline-block';
+                     submitButton.disabled = submissionInProgress || (quizData.questions.length === 0);
+                 }
             }
-             console.log("DEBUG: Initialization complete.");
+             console.log("DEBUG: Initialization complete. UI should be ready.");
 
         } catch (error) {
-             console.error("Error initializing quiz:", error); // Log the specific error
-             quizLoadingDiv.classList.add('d-none');
-             quizErrorDiv.textContent = `Error: ${error.message}`;
-             quizErrorDiv.classList.remove('d-none');
-             quizContainerDiv.classList.add('d-none'); // Hide container on critical error
+             // Catch any error during the entire initialization process
+             console.error("FATAL Error during quiz initialization:", error);
+             quizLoadingDiv.classList.add('d-none'); // Hide loading
+             quizErrorDiv.textContent = `Error initializing quiz: ${error.message}. Please try starting the quiz again.`;
+             quizErrorDiv.classList.remove('d-none'); // Show error
+             quizContainerDiv.classList.add('d-none'); // Hide the main container on critical error
+             // Stop any potential intervals if they somehow started
+             if (autoSaveInterval) clearInterval(autoSaveInterval);
+             if (timerInterval) clearInterval(timerInterval);
         }
     } // End initializeQuiz
-
-
+    
+    
+    
     /**
      * Renders all question cards into the questionAreaDiv based on quizData.
      * Initially hides them if mode is one-by-one.
@@ -634,7 +716,7 @@
         const endTimeISO = new Date(Date.now()).toISOString();
 
         const submissionData = {
-            student_info: studentInfo,
+            student_info: studentInfo, // <<< Send the studentInfo object/array loaded during init
             answers: studentAnswers,
             start_time: startTimeISO,
             end_time: endTimeISO,
