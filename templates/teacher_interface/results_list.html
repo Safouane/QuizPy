@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}View Results - QuizPy{% endblock %}
+
+{% block content %}
+<h1>View Student Results</h1>
+<hr>
+
+{# Quiz Selection and Export Controls #}
+<div class="row g-3 align-items-end mb-4">
+    <div class="col-md-6">
+        <label for="quizSelect" class="form-label">Select Quiz:</label>
+        <select class="form-select" id="quizSelect">
+            <option value="" selected>-- Select a Quiz --</option>
+            {% for quiz in quizzes %}
+                <option value="{{ quiz.id }}">{{ quiz.title }}</option>
+            {% empty %}
+                 <option value="" disabled>No quizzes available</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-6 text-md-end">
+        <div class="btn-group" role="group" aria-label="Export options">
+             <button type="button" id="exportJsonBtn" class="btn btn-outline-secondary" disabled>
+                  <i class="bi bi-filetype-json"></i> Export JSON
+             </button>
+             <button type="button" id="exportExcelBtn" class="btn btn-outline-success" disabled>
+                  <i class="bi bi-file-earmark-excel"></i> Export Excel
+             </button>
+         </div>
+    </div>
+</div>
+
+{# Feedback Placeholders #}
+<div id="loadingSpinner" class="text-center my-5 d-none"> {# Initially hidden #}
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div>
+    <p>Loading results...</p>
+</div>
+<div id="errorMessage" class="alert alert-danger d-none"></div>
+<div id="noResultsMessage" class="alert alert-info d-none">No results found for the selected quiz.</div>
+
+
+{# Results Table #}
+<div id="resultsTableContainer" class="table-responsive d-none"> {# Initially hidden #}
+    <h4 id="resultsQuizTitle" class="mb-3">Results for: </h4>
+    <table class="table table-striped table-hover align-middle">
+        <thead>
+            <tr>
+                <th scope="col">Student Name</th>
+                <th scope="col">Class</th>
+                <th scope="col">ID/Number</th>
+                <th scope="col">Score (%)</th>
+                <th scope="col">Passed</th>
+                <th scope="col">Submitted At</th>
+                <th scope="col">Timed Out</th>
+                {# <th scope="col">Actions</th> #} {# Placeholder for View Details later #}
+            </tr>
+        </thead>
+        <tbody id="resultsTableBody">
+            {# Attempt rows will be inserted here by JavaScript #}
+        </tbody>
+    </table>
+</div>
+
+{# TODO: Add Modal for viewing detailed attempt answers later #}
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    // --- DOM Elements ---
+    const quizSelect = document.getElementById('quizSelect');
+    const exportJsonBtn = document.getElementById('exportJsonBtn');
+    const exportExcelBtn = document.getElementById('exportExcelBtn');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const errorMessage = document.getElementById('errorMessage');
+    const noResultsMessage = document.getElementById('noResultsMessage');
+    const resultsTableContainer = document.getElementById('resultsTableContainer');
+    const resultsTableBody = document.getElementById('resultsTableBody');
+    const resultsQuizTitle = document.getElementById('resultsQuizTitle');
+
+    // --- Event Listeners ---
+    quizSelect.addEventListener('change', handleQuizSelectionChange);
+    exportJsonBtn.addEventListener('click', handleExportClick);
+    exportExcelBtn.addEventListener('click', handleExportClick);
+
+    // --- Functions ---
+    function handleQuizSelectionChange() {
+        const selectedQuizId = quizSelect.value;
+        const selectedQuizTitle = quizSelect.options[quizSelect.selectedIndex].text;
+
+        // Reset UI state
+        resultsTableContainer.classList.add('d-none');
+        noResultsMessage.classList.add('d-none');
+        errorMessage.classList.add('d-none');
+        exportJsonBtn.disabled = true;
+        exportExcelBtn.disabled = true;
+        resultsTableBody.innerHTML = '';
+        resultsQuizTitle.textContent = 'Results for: ';
+
+        if (!selectedQuizId) {
+            return; // No quiz selected
+        }
+
+        console.log("Selected Quiz ID:", selectedQuizId);
+        resultsQuizTitle.textContent = `Results for: ${escapeHTML(selectedQuizTitle)}`;
+        fetchQuizAttempts(selectedQuizId);
+    }
+
+    async function fetchQuizAttempts(quizId) {
+        loadingSpinner.classList.remove('d-none'); // Show spinner
+
+        const apiUrl = `/api/quizzes/${quizId}/attempts/`; // Use named URL? Better but harder in JS without library
+        console.log("Fetching attempts from:", apiUrl);
+
+        try {
+            const response = await fetch(apiUrl); // GET request
+            if (!response.ok) {
+                 const errorData = await response.json().catch(() => ({})); // Try get error msg
+                 throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+            }
+            const data = await response.json();
+            renderResultsTable(data.attempts || []);
+
+            // Enable export buttons if data loaded
+            if (data.attempts && data.attempts.length > 0) {
+                 exportJsonBtn.disabled = false;
+                 exportExcelBtn.disabled = false;
+                 exportJsonBtn.dataset.quizId = quizId; // Store ID for export click
+                 exportExcelBtn.dataset.quizId = quizId;
+            }
+
+        } catch (error) {
+            console.error('Error fetching attempts:', error);
+            errorMessage.textContent = `Error loading results: ${error.message}`;
+            errorMessage.classList.remove('d-none');
+        } finally {
+            loadingSpinner.classList.add('d-none'); // Hide spinner
+        }
+    }
+
+    function renderResultsTable(attempts) {
+        resultsTableBody.innerHTML = ''; // Clear previous
+        if (attempts.length === 0) {
+            noResultsMessage.classList.remove('d-none');
+            resultsTableContainer.classList.add('d-none');
+        } else {
+            attempts.forEach(att => {
+                const row = resultsTableBody.insertRow();
+                const passedText = att.passed ? 'Yes' : 'No';
+                const passedClass = att.passed ? 'text-success' : 'text-danger';
+                const timeoutText = att.submitted_due_to_timeout ? 'Yes' : 'No';
+                const scoreText = att.score_percentage !== null ? `${att.score_percentage.toFixed(1)}%` : 'N/A';
+                // Format timestamp nicely
+                let submissionTime = 'N/A';
+                try {
+                    if (att.submission_time) {
+                         submissionTime = new Date(att.submission_time).toLocaleString();
+                    }
+                } catch(e) { console.warn("Could not parse submission time", att.submission_time); }
+
+
+                row.innerHTML = `
+                    <td>${escapeHTML(att.student_name)}</td>
+                    <td>${escapeHTML(att.student_class)}</td>
+                    <td>${escapeHTML(att.student_id_number)}</td>
+                    <td>${scoreText}</td>
+                    <td><span class="${passedClass}">${passedText}</span></td>
+                    <td>${submissionTime}</td>
+                    <td>${timeoutText}</td>
+                    {# Add Actions cell later for view details button #}
+                `;
+            });
+            resultsTableContainer.classList.remove('d-none'); // Show table
+        }
+    }
+
+    function handleExportClick(event) {
+        const button = event.currentTarget;
+        const quizId = button.dataset.quizId;
+        if (!quizId) {
+             console.error("Cannot export, quizId not found on button.");
+             return;
+        }
+
+        let exportUrl = '';
+        if (button.id === 'exportJsonBtn') {
+             exportUrl = `/api/quizzes/${quizId}/attempts/export/json/`;
+        } else if (button.id === 'exportExcelBtn') {
+             exportUrl = `/api/quizzes/${quizId}/attempts/export/excel/`;
+        }
+
+        if (exportUrl) {
+             console.log("Triggering export:", exportUrl);
+             // Navigate directly to trigger download
+             window.location.href = exportUrl;
+        }
+    }
+
+    // --- Helper: escapeHTML ---
+    function escapeHTML(str) {
+       if (str === null || str === undefined) return '';
+       const div = document.createElement('div');
+       div.textContent = str;
+       return div.innerHTML;
+    }
+
+</script>
+{% endblock %}

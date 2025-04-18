@@ -54,7 +54,7 @@
                 "fd23eca4-dc92-471d-99cf-376bb211934a"
             ],
             "config": {
-                "duration": null,
+                "duration": 2,
                 "pass_score": 70.0,
                 "presentation_mode": "all",
                 "allow_back": true,
@@ -152,7 +152,7 @@
         {
             "id": "bffb2f54-ee68-439d-96c4-2e76d467bb29",
             "title": "First Quiz",
-            "access_key": "99Z123",
+            "access_key": "XXXXXX",
             "description": "Testing all the quizzes' features.",
             "questions": [
                 "d26aa5c1-6827-4aa9-b32c-c5c1e4e46be4",
@@ -166,6 +166,28 @@
                 "randomize_questions": false,
                 "shuffle_answers": false
             },
+            "archived": false,
+            "versions": []
+        },
+        {
+            "id": "243985b5-5db0-4f38-a2e8-caf24f99af7f",
+            "title": "Test Quiz",
+            "description": "Quiz created to be tested from student UI.",
+            "questions": [
+                "b756a169-7a38-4198-aabf-0b46e6d30f00",
+                "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4",
+                "b46a51f0-acda-4668-8965-21db18839f22",
+                "0f10dd11-b07c-4b8e-af33-9d2ec2252d78"
+            ],
+            "config": {
+                "duration": 2,
+                "pass_score": 70.0,
+                "presentation_mode": "all",
+                "allow_back": true,
+                "randomize_questions": true,
+                "shuffle_answers": true
+            },
+            "access_key": "YPOUAD",
             "archived": false,
             "versions": []
         }
@@ -884,6 +906,363 @@
             "media_url": "",
             "short_answer_review_mode": "manual",
             "short_answer_correct_text": null
+        },
+        {
+            "id": "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4",
+            "quiz_ids": [],
+            "text": "What is 2+2",
+            "type": "MCQ",
+            "options": [
+                {
+                    "id": "0d922bcc-ec0d-4a7d-9e69-99e32d94470a",
+                    "text": "4"
+                },
+                {
+                    "id": "fe151df4-fe1d-41a6-8c08-c6982b568ec3",
+                    "text": "5"
+                }
+            ],
+            "correct_answer": [
+                "0d922bcc-ec0d-4a7d-9e69-99e32d94470a"
+            ],
+            "score": "5",
+            "difficulty": "Easy",
+            "category": "math",
+            "media_url": "",
+            "short_answer_review_mode": "manual",
+            "short_answer_correct_text": null
+        },
+        {
+            "id": "b46a51f0-acda-4668-8965-21db18839f22",
+            "quiz_ids": [],
+            "text": "What is 5+5",
+            "type": "MCQ",
+            "options": [
+                {
+                    "id": "d84359a2-323f-4120-baa2-34add0067d2e",
+                    "text": "11"
+                },
+                {
+                    "id": "09a88772-7fdb-457e-8ddb-37979ac055f2",
+                    "text": "10"
+                }
+            ],
+            "correct_answer": [
+                "09a88772-7fdb-457e-8ddb-37979ac055f2"
+            ],
+            "score": "5",
+            "difficulty": "Easy",
+            "category": "math",
+            "media_url": "",
+            "short_answer_review_mode": "manual",
+            "short_answer_correct_text": null
+        },
+        {
+            "id": "0f10dd11-b07c-4b8e-af33-9d2ec2252d78",
+            "quiz_ids": [],
+            "text": "Capital of Morocco?",
+            "type": "SHORT_TEXT",
+            "options": [],
+            "correct_answer": [],
+            "score": "5",
+            "difficulty": "Medium",
+            "category": "geography",
+            "media_url": "",
+            "short_answer_review_mode": "auto",
+            "short_answer_correct_text": "Rabat"
+        },
+        {
+            "id": "b756a169-7a38-4198-aabf-0b46e6d30f00",
+            "quiz_ids": [],
+            "text": "x = 2\nx = x+2\nWhat is the value of x",
+            "type": "MCQ",
+            "options": [
+                {
+                    "id": "ef0c10ec-fa1b-48c7-940d-7a039bd1ce48",
+                    "text": "2"
+                },
+                {
+                    "id": "36530c12-20e0-4d10-80fd-e6bc8167a589",
+                    "text": "3"
+                },
+                {
+                    "id": "7459b434-a112-4568-807e-9112a1d6b129",
+                    "text": "4"
+                },
+                {
+                    "id": "00bc3fcd-0fd2-477a-9abc-24684d91bf3d",
+                    "text": "6"
+                }
+            ],
+            "correct_answer": [
+                "7459b434-a112-4568-807e-9112a1d6b129"
+            ],
+            "score": "5",
+            "difficulty": "Medium",
+            "category": "Computer Science",
+            "media_url": "",
+            "short_answer_review_mode": "manual",
+            "short_answer_correct_text": null
+        }
+    ],
+    "attempts": [
+        {
+            "attempt_id": "c1a7a550-f254-49ca-8215-278d18b30f23",
+            "quiz_id": "243985b5-5db0-4f38-a2e8-caf24f99af7f",
+            "quiz_title_at_submission": "Test Quiz",
+            "student_info": {
+                "name": "Safouane",
+                "class": "2/1",
+                "id": "12"
+            },
+            "answers": {
+                "b46a51f0-acda-4668-8965-21db18839f22": [],
+                "0f10dd11-b07c-4b8e-af33-9d2ec2252d78": "rabat",
+                "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4": [
+                    "0d922bcc-ec0d-4a7d-9e69-99e32d94470a"
+                ],
+                "b756a169-7a38-4198-aabf-0b46e6d30f00": [
+                    "ef0c10ec-fa1b-48c7-940d-7a039bd1ce48",
+                    "7459b434-a112-4568-807e-9112a1d6b129",
+                    "00bc3fcd-0fd2-477a-9abc-24684d91bf3d",
+                    "36530c12-20e0-4d10-80fd-e6bc8167a589"
+                ]
+            },
+            "score_achieved": 10.0,
+            "max_possible_score": 20.0,
+            "percentage": 50.0,
+            "passed": false,
+            "pass_score_threshold": 70.0,
+            "start_time": "2025-04-17T20:22:47.285Z",
+            "end_time": "2025-04-17T20:24:47.299Z",
+            "submitted_due_to_timeout": true,
+            "graded_details": [
+                {
+                    "question_id": "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b46a51f0-acda-4668-8965-21db18839f22",
+                    "is_correct": false,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "0f10dd11-b07c-4b8e-af33-9d2ec2252d78",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b756a169-7a38-4198-aabf-0b46e6d30f00",
+                    "is_correct": false,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                }
+            ]
+        },
+        {
+            "attempt_id": "c44a624e-63ef-40c3-bd26-71d7c1e58221",
+            "quiz_id": "bffb2f54-ee68-439d-96c4-2e76d467bb29",
+            "quiz_title_at_submission": "First Quiz",
+            "student_info": {
+                "name": "dd",
+                "class": "dd",
+                "id": "11"
+            },
+            "answers": {
+                "714ffacd-3cf0-450e-ae36-b485bd64c45c": [
+                    "915e49e9-2eab-42a5-a8b7-f9b5e60ce982",
+                    "d8bb4359-57d6-4a52-821f-0b5dace6506a"
+                ]
+            },
+            "score_achieved": 0.0,
+            "max_possible_score": 3.0,
+            "percentage": 0.0,
+            "passed": false,
+            "pass_score_threshold": 70.0,
+            "start_time": "2025-04-18T00:58:33.186Z",
+            "end_time": "2025-04-18T00:58:42.514Z",
+            "submitted_due_to_timeout": false,
+            "graded_details": [
+                {
+                    "question_id": "d26aa5c1-6827-4aa9-b32c-c5c1e4e46be4",
+                    "is_correct": null,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "714ffacd-3cf0-450e-ae36-b485bd64c45c",
+                    "is_correct": false,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                }
+            ]
+        },
+        {
+            "attempt_id": "9b6efcba-f8c3-4e39-bcc8-305510f090e1",
+            "quiz_id": "243985b5-5db0-4f38-a2e8-caf24f99af7f",
+            "quiz_title_at_submission": "Test Quiz",
+            "student_info": {
+                "name": "dsdsd",
+                "class": "ads",
+                "id": "wff"
+            },
+            "answers": {
+                "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4": [
+                    "fe151df4-fe1d-41a6-8c08-c6982b568ec3",
+                    "0d922bcc-ec0d-4a7d-9e69-99e32d94470a"
+                ]
+            },
+            "score_achieved": 0.0,
+            "max_possible_score": 20.0,
+            "percentage": 0.0,
+            "passed": false,
+            "pass_score_threshold": 70.0,
+            "start_time": "2025-04-18T00:59:29.756Z",
+            "end_time": "2025-04-18T00:59:38.978Z",
+            "submitted_due_to_timeout": false,
+            "graded_details": [
+                {
+                    "question_id": "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4",
+                    "is_correct": false,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b46a51f0-acda-4668-8965-21db18839f22",
+                    "is_correct": null,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "0f10dd11-b07c-4b8e-af33-9d2ec2252d78",
+                    "is_correct": null,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b756a169-7a38-4198-aabf-0b46e6d30f00",
+                    "is_correct": null,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                }
+            ]
+        },
+        {
+            "attempt_id": "cd772fda-0a8f-46c5-8036-7770c854a154",
+            "quiz_id": "243985b5-5db0-4f38-a2e8-caf24f99af7f",
+            "quiz_title_at_submission": "Test Quiz",
+            "student_info": {
+                "name": "dd",
+                "class": "dd",
+                "id": "ss"
+            },
+            "answers": {
+                "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4": [
+                    "0d922bcc-ec0d-4a7d-9e69-99e32d94470a"
+                ],
+                "0f10dd11-b07c-4b8e-af33-9d2ec2252d78": "rabat",
+                "b756a169-7a38-4198-aabf-0b46e6d30f00": [
+                    "00bc3fcd-0fd2-477a-9abc-24684d91bf3d",
+                    "7459b434-a112-4568-807e-9112a1d6b129"
+                ],
+                "b46a51f0-acda-4668-8965-21db18839f22": [
+                    "09a88772-7fdb-457e-8ddb-37979ac055f2"
+                ]
+            },
+            "score_achieved": 15.0,
+            "max_possible_score": 20.0,
+            "percentage": 75.0,
+            "passed": true,
+            "pass_score_threshold": 70.0,
+            "start_time": "2025-04-18T00:59:57.628Z",
+            "end_time": "2025-04-18T01:00:09.203Z",
+            "submitted_due_to_timeout": false,
+            "graded_details": [
+                {
+                    "question_id": "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b46a51f0-acda-4668-8965-21db18839f22",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "0f10dd11-b07c-4b8e-af33-9d2ec2252d78",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b756a169-7a38-4198-aabf-0b46e6d30f00",
+                    "is_correct": false,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                }
+            ]
+        },
+        {
+            "attempt_id": "fe75bf16-5ac8-478c-a9fb-69cd0cb09d62",
+            "quiz_id": "243985b5-5db0-4f38-a2e8-caf24f99af7f",
+            "quiz_title_at_submission": "Test Quiz",
+            "student_info": {
+                "name": "Saf",
+                "class": "testeur",
+                "id": "1200"
+            },
+            "answers": {
+                "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4": [
+                    "0d922bcc-ec0d-4a7d-9e69-99e32d94470a"
+                ],
+                "b756a169-7a38-4198-aabf-0b46e6d30f00": [
+                    "7459b434-a112-4568-807e-9112a1d6b129"
+                ],
+                "b46a51f0-acda-4668-8965-21db18839f22": [
+                    "09a88772-7fdb-457e-8ddb-37979ac055f2"
+                ],
+                "0f10dd11-b07c-4b8e-af33-9d2ec2252d78": "as"
+            },
+            "score_achieved": 15.0,
+            "max_possible_score": 20.0,
+            "percentage": 75.0,
+            "passed": true,
+            "pass_score_threshold": 70.0,
+            "start_time": "2025-04-18T01:16:51.207Z",
+            "end_time": "2025-04-18T01:17:00.873Z",
+            "submitted_due_to_timeout": false,
+            "graded_details": [
+                {
+                    "question_id": "4f6a4577-853b-4c6b-a087-0eeddd4cdfb4",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b46a51f0-acda-4668-8965-21db18839f22",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "0f10dd11-b07c-4b8e-af33-9d2ec2252d78",
+                    "is_correct": false,
+                    "score_awarded": 0.0,
+                    "needs_manual_review": false
+                },
+                {
+                    "question_id": "b756a169-7a38-4198-aabf-0b46e6d30f00",
+                    "is_correct": true,
+                    "score_awarded": 5.0,
+                    "needs_manual_review": false
+                }
+            ]
         }
     ]
 }

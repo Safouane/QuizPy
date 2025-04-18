@@ -54,8 +54,10 @@
     <div class="card text-center h-100">
       <div class="card-body">
         <h5 class="card-title">Student Results</h5>
-         <p class="card-text fs-1">-</p> {# Placeholder for results count #}
-        <a href="#" class="btn btn-info disabled">View Results</a> {# Link to TCHR-9 (placeholder) #}
+         <p class="card-text fs-1">-</p> {# TODO: Count recent results? #}
+         {# --- MODIFIED LINK --- #}
+        <a href="{% url 'teacher_interface:results_list' %}" class="btn btn-info">View Results</a>
+         {# --- END MODIFIED LINK --- #}
       </div>
        <div class="card-footer text-muted">
         Review student performance and export data.

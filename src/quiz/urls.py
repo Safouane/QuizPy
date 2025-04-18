@@ -24,4 +24,10 @@ urlpatterns = [
     # --- Submission URL ---
     # POST /api/quizzes/{quiz_id}/submit/
     path('api/quizzes/<uuid:quiz_id>/submit/', views.quiz_submit_api, name='quiz_submit'),
+
+    # --- Attempt List & Export URLs ---
+    path('api/quizzes/<uuid:quiz_id>/attempts/', views.get_quiz_attempts_api, name='quiz_attempts_list'),
+    path('api/quizzes/<uuid:quiz_id>/attempts/export/json/', views.export_quiz_attempts_json_api, name='quiz_attempts_export_json'),
+    path('api/quizzes/<uuid:quiz_id>/attempts/export/excel/', views.export_quiz_attempts_excel_api, name='quiz_attempts_export_excel'),
+    
 ]

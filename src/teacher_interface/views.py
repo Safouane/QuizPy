@@ -120,3 +120,25 @@ def question_bank_view(request):
     }
     # Potentially pass filter options like categories here later
     return render(request, 'teacher_interface/question_bank.html', context)
+
+@teacher_required
+def results_list_view(request):
+    """
+    Renders the main page for viewing quiz results.
+    Passes a list of quizzes for selection.
+    """
+    try:
+        all_data = load_data()
+        # Get only non-archived quizzes for selection? Or all? Let's show all for now.
+        quizzes = sorted(
+            [{"id": q.get("id"), "title": q.get("title", "Untitled Quiz")} for q in all_data.get('quizzes', [])],
+            key=lambda x: x['title']
+        )
+    except Exception as e:
+        print(f"Error loading quiz list for results page: {e}")
+        quizzes = []
+
+    context = {
+        'quizzes': quizzes,
+    }
+    return render(request, 'teacher_interface/results_list.html', context)

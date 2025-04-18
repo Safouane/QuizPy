@@ -18,4 +18,7 @@ urlpatterns = [
 
     path('teacher/questions/', views.question_bank_view, name='question_bank'),
 
+    # --- Results List URL ---
+    path('teacher/results/', views.results_list_view, name='results_list'),
+
 ]

@@ -9,6 +9,8 @@ from django.http import HttpResponse
 import random
 import datetime
 from decimal import Decimal, ROUND_HALF_UP # For accurate score calculation
+import openpyxl # Add import
+from openpyxl.utils import get_column_letter # Optional: For setting column widths
 
 
 # Import the decorator we created in AUTH-3
@@ -987,3 +989,168 @@ def quiz_submit_api(request, quiz_id):
         import traceback
         traceback.print_exc()
         return JsonResponse({'error': f'An unexpected error occurred during submission: {str(e)}'}, status=500)
+    
+
+# quiz/views.py
+# ... existing imports ...
+
+@api_teacher_required
+@require_http_methods(["GET"])
+def get_quiz_attempts_api(request, quiz_id):
+    """
+    API endpoint for teachers to retrieve a summary list of attempts
+    for a specific quiz.
+    """
+    try:
+        data = load_data()
+        all_attempts = data.get('attempts', [])
+        quiz_id_str = str(quiz_id) # Ensure comparison type consistency
+
+        # Filter attempts for the specific quiz
+        quiz_attempts = [
+            attempt for attempt in all_attempts
+            if str(attempt.get('quiz_id')) == quiz_id_str
+        ]
+
+        # Sort attempts, e.g., by submission time descending
+        quiz_attempts.sort(key=lambda x: x.get('end_time', ''), reverse=True)
+
+        # Prepare summarized data to return (avoid sending raw answers here)
+        summarized_attempts = [
+            {
+                "attempt_id": att.get('attempt_id'),
+                "student_name": att.get('student_info', {}).get('name', 'N/A'),
+                "student_class": att.get('student_info', {}).get('class', ''),
+                "student_id_number": att.get('student_info', {}).get('id', ''),
+                "score_percentage": att.get('percentage'),
+                "passed": att.get('passed'),
+                "submission_time": att.get('end_time'), # ISO format timestamp
+                "submitted_due_to_timeout": att.get('submitted_due_to_timeout', False)
+            }
+            for att in quiz_attempts
+        ]
+
+        print(f"DEBUG: Returning {len(summarized_attempts)} attempt summaries for quiz {quiz_id}")
+        return JsonResponse({'attempts': summarized_attempts})
+
+    except Exception as e:
+        print(f"Error fetching attempts for quiz {quiz_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+    
+def _get_attempts_for_quiz(quiz_id_to_find):
+    """Helper function to fetch and sort attempts for reuse."""
+    data = load_data()
+    all_attempts = data.get('attempts', [])
+    quiz_id_str = str(quiz_id_to_find)
+    quiz_attempts = [
+        attempt for attempt in all_attempts
+        if str(attempt.get('quiz_id')) == quiz_id_str
+    ]
+    quiz_attempts.sort(key=lambda x: x.get('end_time', ''), reverse=True)
+    # Also fetch quiz title for filename
+    quiz_title = 'UnknownQuiz'
+    all_quizzes = data.get('quizzes', [])
+    for q in all_quizzes:
+        if str(q.get('id')) == quiz_id_str:
+            quiz_title = q.get('title', 'Quiz').replace(' ', '_') # Safe title for filename
+            break
+    return quiz_attempts, quiz_title
+
+@api_teacher_required
+@require_http_methods(["GET"])
+def export_quiz_attempts_json_api(request, quiz_id):
+    """Exports attempts for a specific quiz as a JSON file."""
+    try:
+        quiz_attempts, quiz_title = _get_attempts_for_quiz(quiz_id)
+        if not quiz_attempts:
+            # Optionally return empty file or error? Let's return empty for now.
+             pass
+
+        # Select fields for export (can be more detailed than summary list)
+        export_data = [
+             {
+                "Attempt ID": att.get('attempt_id'),
+                "Student Name": att.get('student_info', {}).get('name', 'N/A'),
+                "Student Class": att.get('student_info', {}).get('class', ''),
+                "Student ID/Number": att.get('student_info', {}).get('id', ''),
+                "Score (%)": att.get('percentage'),
+                "Score Achieved": att.get('score_achieved'),
+                "Max Score": att.get('max_possible_score'),
+                "Passed": att.get('passed'),
+                "Submission Time (UTC)": att.get('end_time'),
+                "Timed Out": att.get('submitted_due_to_timeout', False),
+                "Answers": att.get('answers'), # Include raw answers in JSON export
+                "Graded Details": att.get('graded_details') # Include grading details
+            }
+            for att in quiz_attempts
+        ]
+
+        json_export_data = json.dumps({"quiz_results": export_data}, indent=2)
+        filename = f"results_{quiz_title}_{quiz_id}.json"
+        response = HttpResponse(json_export_data, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        return response
+
+    except Exception as e:
+        # Handle errors appropriately, maybe return JSON error response
+        print(f"Error exporting JSON results for quiz {quiz_id}: {e}")
+        return JsonResponse({'error': 'Failed to generate JSON export.'}, status=500)
+
+@api_teacher_required
+@require_http_methods(["GET"])
+def export_quiz_attempts_excel_api(request, quiz_id):
+    """Exports attempts for a specific quiz as an Excel (.xlsx) file."""
+    try:
+        quiz_attempts, quiz_title = _get_attempts_for_quiz(quiz_id)
+
+        # Create Excel workbook and sheet
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = f"Quiz Results ({quiz_title[:20]})" # Sheet title limit
+
+        # Define headers
+        headers = [
+            "Attempt ID", "Student Name", "Student Class", "Student ID/Number",
+            "Score (%)", "Passed", "Submission Time (UTC)", "Timed Out",
+            "Score Achieved", "Max Score"
+            # Avoid exporting raw answers/details to basic Excel for simplicity,
+            # can be added as separate sheets or complex cells if needed later.
+        ]
+        ws.append(headers)
+
+        # Add data rows
+        for att in quiz_attempts:
+            passed_text = "Yes" if att.get('passed') else "No"
+            timeout_text = "Yes" if att.get('submitted_due_to_timeout', False) else "No"
+            row = [
+                att.get('attempt_id', ''),
+                att.get('student_info', {}).get('name', 'N/A'),
+                att.get('student_info', {}).get('class', ''),
+                att.get('student_info', {}).get('id', ''),
+                att.get('percentage', ''),
+                passed_text,
+                att.get('end_time', ''),
+                timeout_text,
+                att.get('score_achieved', ''),
+                att.get('max_possible_score', '')
+            ]
+            ws.append(row)
+
+        # Optional: Adjust column widths
+        for i, column_cells in enumerate(ws.columns):
+             max_length = max(len(str(cell.value)) for cell in column_cells)
+             adjusted_width = (max_length + 2)
+             ws.column_dimensions[get_column_letter(i + 1)].width = adjusted_width
+
+        # Prepare HTTP response
+        filename = f"results_{quiz_title}_{quiz_id}.xlsx"
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response) # Save workbook content to the response
+        return response
+
+    except Exception as e:
+         print(f"Error exporting Excel results for quiz {quiz_id}: {e}")
+         return JsonResponse({'error': 'Failed to generate Excel export.'}, status=500)

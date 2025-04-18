@@ -1,0 +1,173 @@
+{% extends "base.html" %} {# Or simpler student base #}
+{% load static %}
+
+{% block title %}Quiz Results - QuizPy{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    {# Optional: Add custom CSS #}
+{% endblock %}
+
+{% block content %}
+<div class="container mt-4" style="max-width: 700px;">
+
+    <div id="resultsLoading" class="text-center my-5">
+         <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading Results...</span></div>
+         <p>Loading Results...</p>
+    </div>
+
+    <div id="resultsError" class="alert alert-danger d-none">Error loading results data. Please contact your teacher or try starting again.</div>
+
+    {# Results Container - Hidden initially #}
+    <div id="resultsContainer" class="card shadow-sm d-none">
+        <div class="card-header bg-light">
+            <h4 class="mb-0">Quiz Completed!</h4>
+        </div>
+        <div class="card-body text-center">
+
+             {# Pass/Fail Alert #}
+            <div id="passFailAlert" class="alert fs-4" role="alert">
+                {STATUS MESSAGE}
+            </div>
+
+            {# Score Display #}
+            <h5 class="card-title">Your Score</h5>
+            <p class="card-text display-4 fw-bold mb-1">
+                <span id="finalScorePercent">--</span>%
+            </p>
+            <p class="card-text text-muted mb-4">
+                (<span id="achievedScore">--</span> out of <span id="maxScore">--</span> points)
+            </p>
+
+            {# Optional: Display message about manual grading #}
+            <p id="manualReviewNote" class="text-muted small d-none">
+                Note: Some questions may require manual review by your teacher for final scoring.
+            </p>
+
+             {# Optional: Link back to start or dashboard #}
+             <hr class="my-4">
+             <a href="{% url 'student_interface:student_landing' %}" class="btn btn-primary">Take Another Quiz</a>
+             {# Or maybe a link to a student dashboard if one existed #}
+        </div>
+    </div>
+
+    {# Optional: Detailed Answers Section (Future Enhancement based on Teacher Config) #}
+    <!--
+    <div id="detailedAnswersSection" class="mt-4 d-none">
+         <h4>Your Answers</h4>
+         // Loop through graded_details here if available and configured
+    </div>
+    -->
+
+</div> {# End Container #}
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    // --- State ---
+    const attemptIdFromUrl = "{{ attempt_id }}"; // Get from Django context
+
+    // --- DOM Elements ---
+    const resultsLoadingDiv = document.getElementById('resultsLoading');
+    const resultsErrorDiv = document.getElementById('resultsError');
+    const resultsContainerDiv = document.getElementById('resultsContainer');
+    const passFailAlertDiv = document.getElementById('passFailAlert');
+    const finalScoreSpan = document.getElementById('finalScorePercent');
+    const achievedScoreSpan = document.getElementById('achievedScore');
+    const maxScoreSpan = document.getElementById('maxScore');
+    const manualReviewNoteP = document.getElementById('manualReviewNote');
+    // const detailedAnswersSectionDiv = document.getElementById('detailedAnswersSection');
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', loadResults);
+
+    function loadResults() {
+         console.log("Loading results for attempt ID from URL:", attemptIdFromUrl);
+         try {
+             const storedAttemptData = sessionStorage.getItem('quizAttemptData');
+             const storedLastAttemptId = sessionStorage.getItem('lastAttemptId');
+
+             // Basic validation: Check if data exists and if ID matches URL (loosely)
+             if (!storedAttemptData || attemptIdFromUrl !== storedLastAttemptId) {
+                  // Allow mismatch if navigating directly? Maybe just check for storedAttemptData existence.
+                  // Let's require stored data for now for simplicity.
+                   if (!storedAttemptData) {
+                        throw new Error("Quiz attempt data not found in session storage. Results cannot be displayed.");
+                   } else {
+                         console.warn("Attempt ID mismatch between URL and last stored attempt. Displaying stored data anyway.");
+                   }
+             }
+
+             const attemptData = JSON.parse(storedAttemptData);
+             console.log("Loaded Attempt Data:", attemptData);
+
+             // Validate required fields
+             if (attemptData.score === undefined || attemptData.passed === undefined) {
+                 throw new Error("Stored attempt data is missing required fields (score, passed).");
+             }
+
+             // Populate UI
+             populateResultsUI(attemptData);
+
+             // Show results, hide loading
+             resultsLoadingDiv.classList.add('d-none');
+             resultsContainerDiv.classList.remove('d-none');
+
+             // Clean up session storage? Optional - keep for refresh, or clear? Let's keep for now.
+             // sessionStorage.removeItem('quizAttemptData');
+             // sessionStorage.removeItem('lastAttemptId');
+
+         } catch (error) {
+             console.error("Error loading or parsing results data:", error);
+             resultsLoadingDiv.classList.add('d-none');
+             resultsErrorDiv.textContent = `Error: ${error.message}`;
+             resultsErrorDiv.classList.remove('d-none');
+         }
+     }
+
+     function populateResultsUI(data) {
+         // Score
+         finalScoreSpan.textContent = data.score?.toFixed(1) ?? '--'; // Format percentage
+         achievedScoreSpan.textContent = data.achieved_score?.toFixed(1) ?? '--';
+         maxScoreSpan.textContent = data.max_score?.toFixed(1) ?? '--';
+
+         // Pass/Fail Alert
+         if (data.passed) {
+             passFailAlertDiv.classList.remove('alert-danger', 'alert-warning');
+             passFailAlertDiv.classList.add('alert-success');
+             passFailAlertDiv.textContent = "Congratulations, you passed!";
+         } else {
+              passFailAlertDiv.classList.remove('alert-success', 'alert-warning');
+              passFailAlertDiv.classList.add('alert-danger');
+              passFailAlertDiv.textContent = "You did not meet the passing score.";
+         }
+
+        // Check if any question needs manual review
+        // This requires graded_details which might not be in the feedback payload yet
+        // We need API-4 to return this info, or fetch it separately.
+        // For now, let's assume it might be present in future `attemptData`.
+        // const needsReview = data.graded_details?.some(d => d.needs_manual_review);
+        // if (needsReview) {
+        //      manualReviewNoteP.classList.remove('d-none');
+        // }
+
+        // Optional: Display detailed answers - Requires more complex rendering
+        // if (/* teacher configured to show answers AND data exists */) {
+        //     renderDetailedAnswers(data.graded_details); // Pass details if available
+        //     detailedAnswersSectionDiv.classList.remove('d-none');
+        // }
+     }
+
+     /* // Placeholder for detailed answer rendering
+     function renderDetailedAnswers(details) {
+          // ... implementation to loop through details and display Q/A/Correctness ...
+     } */
+
+     // --- Helper Functions ---
+     // function escapeHTML(str) { /* ... copy if needed ... */ }
+
+</script>
+{% endblock %}

@@ -1,0 +1,891 @@
+{% extends "base.html" %} {# Or potentially a simpler base for students? Using main one for now #}
+{% load static %}
+
+{% block title %}Taking Quiz - QuizPy{% endblock %}
+
+{% block extra_head %}
+    {{ block.super }}
+    {# Optional: Add custom CSS for quiz layout if needed #}
+    <style>
+        /* Minimal styling for better focus */
+        /* body { background-color: #f8f9fa; } */
+        #quizContainer { max-width: 800px; margin: auto; }
+        .question-card { margin-bottom: 1.5rem; }
+        /* Hide base navbar/footer? */
+        /* nav.navbar, footer { display: none; } */
+    </style>
+{% endblock %}
+
+
+{% block content %}
+<div id="quizLoading" class="text-center my-5">
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading Quiz...</span></div>
+    <p>Loading Quiz...</p>
+</div>
+
+<div id="quizError" class="alert alert-danger d-none">Error loading quiz data. Please try starting again.</div>
+
+{# Main Quiz Container - Hidden initially #}
+<div id="quizContainer" class="container mt-4 d-none">
+
+    {# Header: Title, Timer, Progress #}
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+             <h4 id="quizTitle" class="mb-0">Quiz Title</h4>
+             <div id="quizTimer" class="fw-bold fs-5 text-danger"></div> {# Timer display #}
+        </div>
+        <div class="card-body">
+            <div class="d-flex justify-content-between mb-1">
+                <span>Progress</span>
+                <span id="progressText">Question X of Y</span>
+            </div>
+            <div class="progress" style="height: 10px;">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div id="studentInfoDisplay" class="mt-2 text-muted small"></div> {# Display student name #}
+        </div>
+    </div>
+
+    {# Question Display Area #}
+    <div id="questionArea">
+        {# Questions will be rendered here by JavaScript #}
+        {# Example structure for one question card #}
+        <!--
+        <div class="card shadow-sm question-card" data-question-id="q_uuid_1" style="display: none;">
+            <div class="card-body">
+                <h5 class="card-title mb-3">Question 1: <span class="question-text">[Question Text Here]</span></h5>
+                <div class="question-media mb-3"></div>
+                <div class="question-options">
+                    // Options rendered here based on type (MCQ, Short Text)
+                </div>
+            </div>
+        </div>
+        -->
+    </div>
+
+    {# Navigation Area #}
+    <div class="d-flex justify-content-between mt-4 mb-5">
+        <button id="prevButton" class="btn btn-secondary" style="display: none;"><i class="bi bi-arrow-left"></i> Previous</button>
+        <button id="nextButton" class="btn btn-primary">Next <i class="bi bi-arrow-right"></i></button>
+        <button id="submitButton" class="btn btn-success" style="display: none;">
+            {# --- ADD THIS SPINNER SPAN --- #}
+            <span class="spinner-border spinner-border-sm d-none me-1" role="status" aria-hidden="true"></span>
+            {# --- END ADD --- #}
+            <i class="bi bi-check-circle-fill"></i>
+            Submit Quiz
+        </button>    </div>
+
+</div> {# End Quiz Container #}
+
+{% endblock %}
+
+{% block extra_scripts %}
+{{ block.super }}
+<script>
+    // --- Constants ---
+    const quizId = "{{ quiz_id }}"; // Get quiz ID from Django context
+    const LOCAL_STORAGE_KEY_PREFIX = 'quizState_';
+
+    // --- State Variables ---
+    let quizData = null;                // Holds the structure of the quiz {id, title, config, questions:[{id, text, type, options?, media_url?}]}
+    let studentInfo = null;             // Holds { name, class, id }
+    let currentQuestionIndex = 0;       // Index of the currently displayed question (for one-by-one)
+    let studentAnswers = {};            // Stores answers as { questionId: answerValue }
+    let quizStartTime = null;           // Timestamp when the quiz was started/resumed
+    let timerInterval = null;           // Holds the interval ID for the countdown timer
+    let quizEndTime = null;             // Calculated target end timestamp for timed quizzes
+    let presentationMode = 'all';       // 'all' or 'one-by-one'
+    let allowBack = true;               // Whether back navigation is allowed in one-by-one
+    let autoSaveInterval = null;        // Holds the interval ID for periodic auto-save
+    let submissionInProgress = false;   // Flag to prevent double submissions
+
+
+    // --- DOM Elements ---
+    const quizLoadingDiv = document.getElementById('quizLoading');
+    const quizErrorDiv = document.getElementById('quizError');
+    const quizContainerDiv = document.getElementById('quizContainer');
+    const quizTitleH4 = document.getElementById('quizTitle');
+    const quizTimerDiv = document.getElementById('quizTimer');
+    const progressTextSpan = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const studentInfoDisplayDiv = document.getElementById('studentInfoDisplay');
+    const questionAreaDiv = document.getElementById('questionArea');
+    const prevButton = document.getElementById('prevButton');
+    const nextButton = document.getElementById('nextButton');
+    const submitButton = document.getElementById('submitButton');
+    const submitSpinner = submitButton ? submitButton.querySelector('.spinner-border') : null;
+    console.log("DEBUG: submitButton found:", submitButton); 
+    console.log("DEBUG: submitSpinner found:", submitSpinner); 
+
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', initializeQuiz);
+
+    // Navigation Button Listeners
+    // Check if elements exist before adding listeners
+    if (prevButton) {
+        prevButton.addEventListener('click', () => {
+             console.log("DEBUG: Previous Button Clicked!"); // Log click
+             navigate(-1);
+        });
+    } else {
+         console.error("Error: Previous button element ('prevButton') not found!");
+    }
+
+    if (nextButton) {
+        nextButton.addEventListener('click', () => {
+             console.log("DEBUG: Next Button Clicked!"); // Log click
+             navigate(1);
+        });
+    } else {
+         console.error("Error: Next button element ('nextButton') not found!");
+    }
+
+    // Submit Button Listener
+    if (submitButton) {
+        submitButton.addEventListener('click', () => {
+            console.log(">>> DEBUG: Manual Submit Button Clicked! <<<"); // Log click
+            submitQuiz(false); // Call submit function, passing false for 'isTimeUp'
+        });
+    } else {
+        console.error("Error: Submit button element ('submitButton') not found!");
+    }
+
+    // Cleanup intervals on page leave (unload/close tab)
+    window.addEventListener('beforeunload', () => {
+        console.log("DEBUG: beforeunload event triggered.");
+        // Clear intervals to prevent them running after page context is gone
+        if (autoSaveInterval) clearInterval(autoSaveInterval);
+        if (timerInterval) clearInterval(timerInterval);
+        // Attempt a final save *only if* submission isn't already in progress
+        // This helps capture the very last state before closing.
+        if (!submissionInProgress) {
+             console.log("DEBUG: Attempting final save before unload.");
+             saveQuizState();
+        }
+    });
+
+    console.log("DEBUG: End of script block. All event listeners attached (or attempted)."); // Final confirmation log
+
+    // --- End of Event Listeners Section ---
+
+    // --- Core Functions ---
+
+    /**
+     * Initializes the quiz page. Loads core data from sessionStorage, checks for resume state,
+     * applies saved state from localStorage if resuming, sets up the UI, timer, and auto-save.
+     */
+    function initializeQuiz() {
+        console.log("Initializing quiz for ID:", quizId);
+        try {
+            // --- Load Core Quiz Structure (ALWAYS from sessionStorage) ---
+            const coreQuizDataString = sessionStorage.getItem(`quizData_${quizId}`);
+            if (!coreQuizDataString) {
+                throw new Error(`Core quiz data (quizData_${quizId}) not found in session storage. Please start the quiz again.`);
+            }
+            quizData = JSON.parse(coreQuizDataString); // This holds questions, config, title etc.
+            console.log("DEBUG: Loaded CORE quiz structure from sessionStorage:", quizData);
+
+             // Validate the core structure first
+             if (!quizData.id || !quizData.title || !Array.isArray(quizData.questions)) {
+                 throw new Error("Loaded core quiz data structure is invalid (missing id, title, or questions array).");
+             }
+             if (!Array.isArray(quizData.questions)) {
+                 throw new Error("Loaded core quiz data 'questions' field is not an array.");
+             }
+             console.log("DEBUG: Core quiz data validated. Number of questions:", quizData.questions.length);
+
+
+            // --- Check for Resume Flag (from sessionStorage) ---
+            const resumeFlagKey = `resumeState_${quizId}`;
+            const isResuming = sessionStorage.getItem(resumeFlagKey) === 'true';
+            console.log("DEBUG: isResuming:", isResuming);
+
+            // Clean up resume flag immediately after checking
+            sessionStorage.removeItem(resumeFlagKey);
+
+
+            // --- Load Student Info (from sessionStorage) ---
+            const storedStudentInfo = sessionStorage.getItem('quizStudentInfo');
+             if (!storedStudentInfo) {
+                 throw new Error("Student info not found in session storage.");
+             }
+             studentInfo = JSON.parse(storedStudentInfo);
+
+
+            // --- Apply Saved State (from localStorage) OR Initialize Fresh State ---
+            let savedState = null; // Holds data from localStorage if resuming
+            let remainingTimeSeconds = null; // Time to start timer with
+
+            if (isResuming) {
+                console.log("DEBUG: Attempting to load saved state from localStorage.");
+                const storageKey = getLocalStorageKey(); // e.g., quizState_quizId
+                const storedStateValue = localStorage.getItem(storageKey);
+                if (storedStateValue) {
+                    try {
+                        savedState = JSON.parse(storedStateValue);
+                        console.log("DEBUG: Parsed saved state from localStorage:", savedState);
+                        // Apply saved state (only answers, index, time matter here)
+                        studentAnswers = savedState.answers || {};
+                        currentQuestionIndex = savedState.currentQuestionIndex || 0;
+                        remainingTimeSeconds = savedState.remainingTimeSeconds; // Get saved time
+                        // Safety check: Ensure index is within bounds of loaded questions
+                        if (currentQuestionIndex >= quizData.questions.length || currentQuestionIndex < 0) {
+                            console.warn("Saved question index out of bounds, resetting to 0.");
+                            currentQuestionIndex = 0;
+                        }
+                    } catch (e) {
+                         console.error("Error parsing saved state from localStorage, starting fresh state.", e);
+                         studentAnswers = {};
+                         currentQuestionIndex = 0;
+                    }
+                } else {
+                     console.warn("DEBUG: Resume flag set, but no saved state found in localStorage. Starting fresh state.");
+                     studentAnswers = {};
+                     currentQuestionIndex = 0;
+                }
+            } else {
+                console.log("DEBUG: Starting fresh quiz state.");
+                studentAnswers = {}; // Initialize empty answers
+                currentQuestionIndex = 0;
+                // remainingTimeSeconds remains null for fresh start timer setup
+            }
+
+
+            // --- Set Configuration (from FRESH quizData loaded earlier) ---
+            presentationMode = quizData.config?.presentation_mode || 'all';
+            allowBack = quizData.config?.allow_back !== undefined ? quizData.config.allow_back : true;
+
+
+            // --- Setup UI (common for resume/fresh) ---
+            quizTitleH4.textContent = quizData.title || 'Quiz';
+            studentInfoDisplayDiv.textContent = `Student: ${escapeHTML(studentInfo.name || 'N/A')}`;
+            renderQuestions();      // Render based on quizData.questions (which is now correctly populated)
+            restoreAnswersUI();     // Populate UI with studentAnswers (empty for fresh, loaded for resume)
+            updateProgress();       // Set initial progress based on currentQuestionIndex
+            setupTimer(remainingTimeSeconds); // Pass remaining time (null for fresh start)
+            quizStartTime = isResuming ? (savedState?.lastSaved ? determineOriginalStartTime(savedState) : Date.now()) : Date.now(); // Estimate start time
+
+            quizLoadingDiv.classList.add('d-none');
+            quizContainerDiv.classList.remove('d-none');
+
+            // Start periodic auto-save (needs quizData to be set)
+            if (autoSaveInterval) clearInterval(autoSaveInterval);
+            autoSaveInterval = setInterval(saveQuizState, 30 * 1000); // Save every 30 seconds
+
+            // Display first question or all questions
+            if (presentationMode === 'one-by-one') {
+                showQuestion(currentQuestionIndex); // Show the correct starting question
+                updateNavigationButtons();
+            } else { // 'all' mode
+                showAllQuestions();
+                prevButton.style.display = 'none';
+                nextButton.style.display = 'none';
+                submitButton.style.display = 'block';
+                 // Ensure submit button is enabled initially in 'all' mode
+                 submitButton.disabled = false;
+            }
+             console.log("DEBUG: Initialization complete.");
+
+        } catch (error) {
+             console.error("Error initializing quiz:", error); // Log the specific error
+             quizLoadingDiv.classList.add('d-none');
+             quizErrorDiv.textContent = `Error: ${error.message}`;
+             quizErrorDiv.classList.remove('d-none');
+             quizContainerDiv.classList.add('d-none'); // Hide container on critical error
+        }
+    } // End initializeQuiz
+
+
+    /**
+     * Renders all question cards into the questionAreaDiv based on quizData.
+     * Initially hides them if mode is one-by-one.
+     */
+    function renderQuestions() {
+        console.log("DEBUG: renderQuestions called.");
+        questionAreaDiv.innerHTML = ''; // Clear previous
+        if (!quizData || !quizData.questions || quizData.questions.length === 0) {
+            console.warn("DEBUG: No questions found in quizData to render.");
+            questionAreaDiv.innerHTML = '<p class="text-danger">Error: No questions were loaded for this quiz.</p>';
+            // Disable all navigation if no questions
+            prevButton.style.display = 'none';
+            nextButton.style.display = 'none';
+            submitButton.style.display = 'none';
+            // Update progress for empty state
+            progressTextSpan.textContent = `Question 0 of 0`;
+            progressBar.style.width = `0%`;
+            progressBar.setAttribute('aria-valuenow', 0);
+            return;
+        }
+
+        quizData.questions.forEach((q, index) => {
+            const card = document.createElement('div');
+            card.classList.add('card', 'shadow-sm', 'question-card');
+            card.dataset.questionId = q.id;
+            card.dataset.index = index; // Store index
+            // Default to hidden, showQuestion or showAllQuestions will manage visibility
+            card.style.display = 'none';
+
+            let optionsHtml = '';
+            // --- Render based on Question Type ---
+            if (q.type === 'MCQ') {
+                optionsHtml = '<div class="list-group list-group-flush question-options">';
+                (q.options || []).forEach(opt => {
+                    const inputId = `q_${q.id}_opt_${opt.id}`;
+                    // Use radio buttons if only one correct answer is expected? Hard to know from data alone. Default to checkbox.
+                    optionsHtml += `
+                        <label class="list-group-item" for="${inputId}">
+                            <input class="form-check-input me-2 mcq-option"
+                                   type="checkbox"
+                                   name="q_${q.id}"
+                                   value="${opt.id}"
+                                   id="${inputId}"
+                                   data-question-id="${q.id}"
+                                   onchange="saveAnswer(this)">
+                            ${escapeHTML(opt.text)}
+                        </label>
+                    `;
+                });
+                 optionsHtml += '</div>';
+            } else if (q.type === 'SHORT_TEXT') {
+                const inputId = `q_${q.id}_ans`;
+                optionsHtml = `
+                    <div class="question-options">
+                        <label for="${inputId}" class="form-label">Your Answer:</label>
+                        <textarea class="form-control short-text-answer"
+                                  id="${inputId}"
+                                  rows="3"
+                                  data-question-id="${q.id}"
+                                  oninput="saveAnswer(this)"
+                                  placeholder="Enter your answer here..."></textarea>
+                    </div>
+                `;
+            } else if (q.type === 'MEDIA') {
+                 optionsHtml = `<div class="question-options text-center"><img src="${escapeHTML(q.media_url || '#')}" class="img-fluid rounded" alt="Question Media" style="max-height: 300px;"></div>`;
+                 // Input needed here still
+                 optionsHtml += `<p class="text-muted mt-2">Please answer based on the media shown.</p>`;
+            } else {
+                 optionsHtml = '<p class="text-muted question-options">Unsupported question type.</p>';
+            }
+
+            // --- Include Media if Present (and not the primary type) ---
+            let mediaHtml = '';
+            if (q.type !== 'MEDIA' && q.media_url) {
+                mediaHtml = `<div class="question-media mb-3 text-center"><img src="${escapeHTML(q.media_url)}" class="img-fluid rounded" alt="Supporting Media" style="max-height: 200px;"></div>`;
+            }
+
+            // --- Assemble Card ---
+            card.innerHTML = `
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Question ${index + 1}: <span class="question-text">${escapeHTML(q.text)}</span></h5>
+                    ${mediaHtml}
+                    ${optionsHtml}
+                </div>
+            `;
+            questionAreaDiv.appendChild(card);
+        });
+    }
+
+     /**
+     * Populates the UI form elements with answers loaded from studentAnswers state.
+     */
+    function restoreAnswersUI() {
+         console.log("DEBUG: Restoring answers to UI:", studentAnswers);
+         Object.keys(studentAnswers).forEach(questionId => {
+             const answer = studentAnswers[questionId];
+             const questionCard = questionAreaDiv.querySelector(`.question-card[data-question-id="${questionId}"]`);
+             if (!questionCard) {
+                  console.warn("Could not find card for question ID:", questionId, "while restoring answers.");
+                  return;
+             }
+
+             if (Array.isArray(answer)) { // MCQ answer (list of option IDs)
+                  console.log(`DEBUG: Restoring MCQ for Q ${questionId}, value:`, answer);
+                  answer.forEach(optionId => {
+                       const checkbox = questionCard.querySelector(`input[type="checkbox"][value="${optionId}"]`);
+                       if (checkbox) {
+                            checkbox.checked = true;
+                       } else {
+                            console.warn("Could not find checkbox for option ID:", optionId, "in question", questionId);
+                       }
+                  });
+             } else if (typeof answer === 'string') { // Short Text answer
+                  console.log(`DEBUG: Restoring Short Text for Q ${questionId}, value:`, answer);
+                  const textarea = questionCard.querySelector(`textarea[data-question-id="${questionId}"]`);
+                  if (textarea) {
+                       textarea.value = answer;
+                  } else {
+                       console.warn("Could not find textarea for question ID:", questionId);
+                  }
+             }
+             // Add cases for other answer types later
+         });
+         console.log("DEBUG: Finished restoring answers to UI.");
+    }
+
+    /**
+     * Shows only the question card at the specified index.
+     * @param {number} index - The index of the question to show.
+     */
+    function showQuestion(index) {
+        console.log("DEBUG: showQuestion called for index:", index);
+        const cards = questionAreaDiv.querySelectorAll('.question-card');
+        cards.forEach((card, i) => {
+            card.style.display = (i === index) ? 'block' : 'none';
+        });
+    }
+
+    /**
+     * Shows all question cards (for 'all' presentation mode).
+     */
+    function showAllQuestions() {
+         console.log("DEBUG: showAllQuestions called.");
+         const cards = questionAreaDiv.querySelectorAll('.question-card');
+         cards.forEach(card => {
+            card.style.display = 'block';
+         });
+    }
+
+    /**
+     * Saves the current value of an answer input to the studentAnswers state object
+     * and triggers saving the state to localStorage.
+     * @param {HTMLElement} inputElement - The input/textarea/checkbox element that changed.
+     */
+    function saveAnswer(inputElement) {
+        if (!inputElement || !inputElement.dataset || submissionInProgress) return; // Don't save if submitting
+        const questionId = inputElement.dataset.questionId;
+        if (!questionId) return;
+
+        let answer;
+        const questionCard = inputElement.closest('.question-card');
+        const questionOptionsDiv = questionCard ? questionCard.querySelector('.question-options') : null;
+
+        if (inputElement.type === 'checkbox' || inputElement.type === 'radio') {
+             if (!questionOptionsDiv) return;
+             const checkedOptions = questionOptionsDiv.querySelectorAll(`input[name="q_${questionId}"]:checked`);
+             answer = Array.from(checkedOptions).map(cb => cb.value);
+        } else if (inputElement.tagName === 'TEXTAREA') {
+             answer = inputElement.value; // Store trimmed? No, store raw input for now.
+        } else {
+             return; // Unsupported type
+        }
+
+        studentAnswers[questionId] = answer;
+        // console.log("Saved Answer for", questionId, ":", answer); // Can be noisy
+        saveQuizState(); // Trigger save
+    }
+
+    /**
+     * Handles clicks on Previous/Next buttons.
+     * @param {number} direction - +1 for Next, -1 for Previous.
+     */
+    function navigate(direction) {
+         console.log("DEBUG: navigate called with direction:", direction);
+         if (submissionInProgress) return; // Prevent navigation while submitting
+
+        const newIndex = currentQuestionIndex + direction;
+        const totalQuestions = quizData?.questions?.length || 0;
+
+        if (newIndex >= 0 && newIndex < totalQuestions) {
+             currentQuestionIndex = newIndex;
+             showQuestion(currentQuestionIndex);
+             updateProgress();
+             updateNavigationButtons();
+             saveQuizState(); // Save state after navigating index
+        } else {
+             console.warn("DEBUG: Navigation blocked (out of bounds). Index:", newIndex);
+        }
+    }
+
+    /**
+     * Updates the visibility and enabled state of Prev/Next/Submit buttons
+     * based on the current question index and quiz configuration.
+     */
+    function updateNavigationButtons() {
+        if (!quizData || !quizData.questions || presentationMode !== 'one-by-one') {
+            // Hide all nav if not one-by-one or no questions
+            prevButton.style.display = 'none';
+            nextButton.style.display = 'none';
+            submitButton.style.display = presentationMode === 'all' ? 'inline-block' : 'none';
+            if(submitButton) submitButton.disabled = submissionInProgress || (quizData.questions.length === 0); // Disable submit if no questions
+            return;
+        }
+
+        const totalQuestions = quizData.questions.length;
+
+        // Previous Button
+        if (currentQuestionIndex > 0 && allowBack) {
+            prevButton.style.display = 'inline-block';
+            prevButton.disabled = submissionInProgress;
+        } else {
+            prevButton.style.display = 'none';
+        }
+
+        // Next/Submit Button
+        if (currentQuestionIndex === totalQuestions - 1) {
+            // Last question
+            nextButton.style.display = 'none';
+            submitButton.style.display = 'inline-block';
+            submitButton.disabled = submissionInProgress;
+        } else {
+            nextButton.style.display = 'inline-block';
+            nextButton.disabled = submissionInProgress;
+            submitButton.style.display = 'none';
+        }
+    }
+
+    /**
+     * Updates the progress bar and text display.
+     */
+    function updateProgress() {
+         const totalQuestions = quizData?.questions?.length || 0;
+         // Ensure currentQuestionIndex is valid before calculating percentage
+         const currentValidIndex = Math.min(Math.max(0, currentQuestionIndex), totalQuestions > 0 ? totalQuestions - 1 : 0);
+         const currentQNumber = totalQuestions > 0 ? currentValidIndex + 1 : 0; // 1-based for display
+         const percent = totalQuestions > 0 ? Math.round((currentQNumber / totalQuestions) * 100) : 0;
+
+         progressTextSpan.textContent = `Question ${currentQNumber} of ${totalQuestions}`;
+         progressBar.style.width = `${percent}%`;
+         progressBar.setAttribute('aria-valuenow', percent);
+    }
+
+    /**
+     * Sets up and starts the countdown timer if configured.
+     * @param {number|null} resumeSeconds - Remaining seconds if resuming, null otherwise.
+     */
+    function setupTimer(resumeSeconds = null) {
+        const durationMinutes = quizData?.config?.duration;
+        quizEndTime = null; // Reset end time
+        if (timerInterval) clearInterval(timerInterval); // Clear previous interval
+        timerInterval = null;
+
+        let startTimeSeconds = null;
+        if (resumeSeconds !== null && resumeSeconds >= 0) {
+            startTimeSeconds = resumeSeconds;
+        } else if (durationMinutes && durationMinutes > 0) {
+            startTimeSeconds = durationMinutes * 60;
+        }
+
+        if (startTimeSeconds === null || startTimeSeconds <= 0) {
+            quizTimerDiv.style.display = 'none';
+            return; // No timer needed
+        }
+
+        quizEndTime = Date.now() + startTimeSeconds * 1000;
+        let timeLeftSeconds = startTimeSeconds;
+
+        quizTimerDiv.style.display = 'block';
+        quizTimerDiv.classList.remove('text-warning', 'text-danger');
+        updateTimerDisplay(timeLeftSeconds);
+
+        console.log(`DEBUG: Timer setup. Start seconds: ${startTimeSeconds}, End time: ${new Date(quizEndTime)}`);
+
+        timerInterval = setInterval(() => {
+            const now = Date.now();
+            timeLeftSeconds = Math.max(0, Math.round((quizEndTime - now) / 1000));
+            updateTimerDisplay(timeLeftSeconds);
+
+            if (timeLeftSeconds <= 0) {
+                 clearInterval(timerInterval);
+                 timerInterval = null;
+                 quizTimerDiv.textContent = "Time's Up!";
+                 quizTimerDiv.classList.remove('text-danger');
+                 quizTimerDiv.classList.add('text-warning');
+                 console.log("Time expired. Auto-submitting quiz.");
+                 if (!submissionInProgress) submitQuiz(true); // Auto-submit
+            } else if (timeLeftSeconds < 60) {
+                 quizTimerDiv.classList.add('text-danger');
+            } else {
+                 quizTimerDiv.classList.remove('text-danger');
+            }
+        }, 1000);
+    }
+
+    /**
+     * Updates the timer display in MM:SS format.
+     * @param {number} seconds - Total seconds remaining.
+     */
+    function updateTimerDisplay(seconds) {
+         const minutes = Math.floor(seconds / 60);
+         const remainingSeconds = seconds % 60;
+         quizTimerDiv.textContent = `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    }
+
+    /**
+     * Gathers submission data, calls the submit API (API-4), handles the response,
+     * clears saved state, and redirects to the results page (STU-3).
+     * @param {boolean} [isTimeUp=false] - Flag indicating if submission is due to timer expiry.
+     */
+    async function submitQuiz(isTimeUp = false) {
+        console.log(`>>> DEBUG: submitQuiz called. Current submissionInProgress: ${submissionInProgress}. Time up: ${isTimeUp}`);
+        if (submissionInProgress) {
+            console.log(">>> DEBUG: Submission already in progress, ignoring submit call.");
+            return;
+        }
+        submissionInProgress = true;
+        console.log(">>> DEBUG: Set submissionInProgress = true");
+        console.log("DEBUG: submitQuiz called. Time up:", isTimeUp);
+        setButtonState(true); // Disable nav/submit buttons and show spinner
+
+        if (timerInterval) clearInterval(timerInterval); // Stop timer
+        if (autoSaveInterval) clearInterval(autoSaveInterval); // Stop auto-save
+
+        const startTimeISO = quizStartTime ? new Date(quizStartTime).toISOString() : null;
+        const endTimeISO = new Date(Date.now()).toISOString();
+
+        const submissionData = {
+            student_info: studentInfo,
+            answers: studentAnswers,
+            start_time: startTimeISO,
+            end_time: endTimeISO,
+            submitted_due_to_timeout: isTimeUp
+        };
+         console.log("Submission Payload (to send to API-4):", submissionData);
+
+         const apiUrl = `/api/quizzes/${quizId}/submit/`;
+         const csrfToken = getCookie('csrftoken'); // Get CSRF if needed
+
+         try {
+             const response = await fetch(apiUrl, {
+                 method: 'POST',
+                 headers: {
+                     'Content-Type': 'application/json',
+                     // 'X-CSRFToken': csrfToken // Include if backend API requires CSRF for this endpoint
+                 },
+                 body: JSON.stringify(submissionData)
+             });
+
+             const data = await response.json();
+             console.log("Submission Response Status:", response.status);
+             console.log("Submission Response Data:", data);
+
+             if (response.ok) {
+                 // --- Success ---
+                 clearSavedState(); // Clear localStorage
+
+                 // Store attempt data for results page
+                 try {
+                     sessionStorage.removeItem(`quizData_${quizId}`);
+                     sessionStorage.setItem('quizAttemptData', JSON.stringify(data));
+                     sessionStorage.setItem('lastAttemptId', data.attempt_id);
+                 } catch (e) {
+                      console.error("Session storage error after submission:", e);
+                 }
+
+                 // Redirect to results page (STU-3)
+                 const resultsUrl = `/quiz/results/${data.attempt_id}/`;
+                 console.log("Redirecting to results page:", resultsUrl);
+                 window.location.href = resultsUrl; // Redirect
+
+             } else {
+                 // --- API Error Handling ---
+                 console.error("Submission failed API response:", data);
+                 alert(`Error submitting quiz: ${data.error || 'Please try again.'}`);
+                 setButtonState(false); // Re-enable buttons on API error
+                 submissionInProgress = false; // Reset flag
+                 // Restart auto-save?
+                 console.log(">>> DEBUG: Reset submissionInProgress = false due to API error.");
+                 if (!autoSaveInterval) autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
+             }
+
+         } catch (error) {
+             // --- Network/JS Error Handling ---
+             console.error("Network or other error submitting quiz:", error);
+             alert("Network error submitting quiz. Please check your connection and try again.");
+             setButtonState(false); // Re-enable buttons
+             submissionInProgress = false; // Reset flag
+             console.log(">>> DEBUG: Reset submissionInProgress = false due to catch block error.");
+             if (!autoSaveInterval) autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
+         }
+    } // End submitQuiz
+
+
+    // --- Auto-Save Logic ---
+
+    /**
+     * Gets the localStorage key specific to this quiz attempt.
+     */
+    function getLocalStorageKey() {
+        return `${LOCAL_STORAGE_KEY_PREFIX}${quizId}`;
+    }
+
+    /**
+     * Saves the current quiz state (answers, index, time) to localStorage.
+     */
+    function saveQuizState() {
+        if (!quizData || !studentInfo || submissionInProgress) return; // Don't save if not initialized or submitting
+
+        let remainingTime = null;
+        if (timerInterval && quizEndTime) {
+            const now = Date.now();
+            remainingTime = Math.max(0, Math.round((quizEndTime - now) / 1000));
+        }
+
+        const stateToSave = {
+            // Storing minimal state needed to resume
+            studentInfo: studentInfo,
+            answers: studentAnswers,
+            currentQuestionIndex: currentQuestionIndex,
+            remainingTimeSeconds: remainingTime,
+            lastSaved: Date.now()
+        };
+
+        try {
+            const key = getLocalStorageKey();
+            localStorage.setItem(key, JSON.stringify(stateToSave));
+            // console.log("DEBUG: Quiz state saved to localStorage."); // Reduce noise
+        } catch (e) {
+            console.error("Error saving quiz state to localStorage:", e);
+            if (autoSaveInterval) {
+                 clearInterval(autoSaveInterval);
+                 autoSaveInterval = null;
+                 alert("Warning: Could not save quiz progress. Local storage might be full or disabled. Auto-save stopped.");
+            }
+        }
+    }
+
+    // --- Helper Functions ---
+
+    /**
+     * Basic HTML escaping function.
+     */
+    function escapeHTML(str) {
+       if (str === null || str === undefined) return '';
+       const div = document.createElement('div');
+       div.textContent = str;
+       return div.innerHTML;
+    }
+
+    /**
+     * Updates the disabled state of navigation/submit buttons and shows/hides
+     * the spinner on the submit button.
+     * @param {boolean} isLoading - True to disable buttons/show spinner, false otherwise.
+     */
+    function setButtonState(isLoading) {
+        if (submitButton) submitButton.disabled = isLoading;
+        if (prevButton) prevButton.disabled = isLoading;
+        if (nextButton) nextButton.disabled = isLoading;
+
+        if(submitSpinner){
+           if(isLoading) {
+               submitSpinner.classList.remove('d-none');
+           } else {
+               submitSpinner.classList.add('d-none');
+           }
+        } else {
+             // Only log warning once perhaps
+             // console.warn("DEBUG: Submit spinner element not found.");
+        }
+    }
+
+    /**
+     * Helper function to get CSRF token from cookies (if needed).
+     */
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    /**
+     * Gets the localStorage key specific to this quiz attempt.
+     */
+    function getLocalStorageKey() {
+        // Enhance later with student ID if multi-student safety needed on same browser
+        return `${LOCAL_STORAGE_KEY_PREFIX}${quizId}`;
+    }
+
+    /**
+     * Clears the saved quiz state from localStorage.
+     */
+     function clearSavedState() {
+         try {
+             const key = getLocalStorageKey();
+             localStorage.removeItem(key);
+             console.log("DEBUG: Cleared saved quiz state from localStorage. Key:", key);
+         } catch (e) {
+             console.error("Error clearing saved quiz state:", e);
+         }
+     }
+
+    /**
+     * Tries to estimate the original start time based on saved state.
+     * Used for informational purposes or potentially more accurate time tracking.
+     * @param {object} savedState - The state object loaded from localStorage.
+     * @returns {number} - Estimated start timestamp (milliseconds since epoch) or current time as fallback.
+     */
+    function determineOriginalStartTime(savedState) {
+        // Check if quizData and config are loaded before accessing duration
+        if (!savedState || !savedState.lastSaved || !quizData?.config?.duration) {
+            return Date.now(); // Fallback to now
+        }
+        try {
+            const durationSeconds = quizData.config.duration * 60;
+            // Use ?? 0 for remainingSeconds in case it's null/undefined in saved state
+            const remainingSeconds = savedState.remainingTimeSeconds ?? durationSeconds;
+            const elapsedSeconds = durationSeconds - remainingSeconds;
+            // Ensure elapsedSeconds isn't negative if remaining > duration (data issue)
+            const safeElapsedSeconds = Math.max(0, elapsedSeconds);
+            return savedState.lastSaved - (safeElapsedSeconds * 1000);
+        } catch (e) {
+             console.error("Error determining original start time:", e);
+             return Date.now(); // Fallback
+        }
+    }
+
+     /**
+      * Shows an error message in the designated error div.
+      * @param {string} message - The error message to display.
+      */
+     function showError(message) {
+         if (quizErrorDiv) { // Check if element exists
+             quizErrorDiv.textContent = message;
+             quizErrorDiv.classList.remove('d-none');
+         } else {
+              console.error("Error display element not found. Message:", message);
+         }
+     }
+
+     /**
+      * Clears any currently displayed error messages.
+      */
+     function clearMessages() { // Renamed from clearError for potentially adding success msgs later
+          if (quizErrorDiv) {
+              quizErrorDiv.classList.add('d-none');
+              quizErrorDiv.textContent = '';
+          }
+          // Add similar logic for success messages if you have a success message div
+     }
+
+     /**
+      * Shows/hides the main quiz container div.
+      * @param {boolean} show - True to show, false to hide.
+      */
+     function showFormContent(show) { // Renamed for consistency if used elsewhere
+          if (quizContainerDiv) {
+             if (show) { quizContainerDiv.classList.remove('d-none'); }
+             else { quizContainerDiv.classList.add('d-none'); }
+          }
+     }
+
+     /**
+      * Shows/hides the main loading spinner.
+      * @param {boolean} show - True to show, false to hide.
+      */
+     function showLoadingSpinner(show) {
+          if (quizLoadingDiv) {
+              if (show) { quizLoadingDiv.classList.remove('d-none'); }
+              else { quizLoadingDiv.classList.add('d-none'); }
+          }
+     }
+</script>
+{% endblock %}
