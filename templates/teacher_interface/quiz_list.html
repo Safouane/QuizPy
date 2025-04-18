@@ -8,7 +8,7 @@
     <h1>Manage Quizzes</h1>
     {# Button to trigger quiz creation (will likely open a modal or go to a new page later) #}
     <a href="{% url 'teacher_interface:quiz_create' %}" class="btn btn-success">
-        <i class="bi bi-plus-circle"></i> Create New Quiz
+        <i class="bi bi-plus-circle me-1"></i> Create New Quiz
     </a>
 </div>
 
@@ -171,24 +171,24 @@
                         </td>
                         <td>${quiz.questions ? quiz.questions.length : 0}</td>
                         <td class="text-end">
-                            {# Placeholder links/buttons - add real functionality later #}
-                            <a href="/teacher/quizzes/${quiz.id}/edit/" class="btn btn-sm btn-primary me-1" title="Edit"><i class="bi bi-pencil-square"></i></a>
-                            <a href="#" class="btn btn-sm btn-info me-1 disabled" title="Configure"><i class="bi bi-gear"></i></a>
+                            <a href="/teacher/quizzes/${quiz.id}/edit/" class="btn btn-sm btn-primary me-1" title="Edit">
+                                <i class="bi bi-pencil-square"></i>
+                            </a>
+                            <a href="#" class="btn btn-sm btn-info me-1 disabled" title="Configure">
+                                <i class="bi bi-gear"></i>
+                            </a>
                             <button class="btn btn-sm ${quiz.archived ? 'btn-success' : 'btn-warning'} me-1 disabled" title="${quiz.archived ? 'Unarchive' : 'Archive'}">
                                  <i class="bi ${quiz.archived ? 'bi-check-circle' : 'bi-archive'}"></i>
-                            </button>
+                             </button>
                             <button class="btn btn-sm btn-danger delete-quiz-btn"
                                     data-quiz-id="${quiz.id}"
                                     data-quiz-title="${escapeHTML(quiz.title || 'N/A')}"
                                     title="Delete">
                                 <i class="bi bi-trash"></i>
                             </button>
-
-                            {# --- EXPORT BUTTON --- #}
-                                <a href="/api/quizzes/${quiz.id}/export/" class="btn btn-sm btn-outline-secondary ms-1" title="Export as JSON" download>
-                                    <i class="bi bi-download"></i>
-                                </a>
-                            {# --- END EXPORT BUTTON --- #}
+                            <a href="/api/quizzes/${quiz.id}/export/" class="btn btn-sm btn-outline-secondary ms-1" title="Export as JSON" download>
+                                <i class="bi bi-download"></i>
+                            </a>
 
                         </td>
                     `;

@@ -203,7 +203,9 @@
                     <td>${escapeHTML(q.category || '-')}</td>
                     <td>${escapeHTML(q.difficulty || '-')}</td>
                     <td class="text-end">
-                        <a href="/teacher/questions/${q.id}/edit/" class="btn btn-sm btn-primary me-1" title="Edit"><i class="bi bi-pencil-square"></i></a>
+                        <a href="/teacher/questions/${q.id}/edit/" class="btn btn-sm btn-primary me-1" title="Edit">
+                            <i class="bi bi-pencil-square"></i>
+                        </a>
                         <button class="btn btn-sm btn-danger delete-question-btn"
                                 data-question-id="${q.id}"
                                 data-question-text-preview="${escapeHTML(q.text || 'N/A')}"
