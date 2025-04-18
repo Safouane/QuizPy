@@ -730,6 +730,13 @@ def quiz_import_api(request):
         new_quiz_id = str(uuid.uuid4())
         new_quiz['id'] = new_quiz_id
 
+        # --- Modify Title ---
+        original_title = new_quiz.get('title', 'Untitled Quiz')
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        new_quiz['title'] = f"{original_title}_{timestamp}_(Imported)"
+        print(f"DEBUG [Import]: Setting new quiz title to: {new_quiz['title']}")
+        # --- End Modify Title ---
+
         # Update quiz's question list with NEW question IDs
         # Map old IDs from imported quiz's 'questions' list to new IDs
         old_question_ids_in_quiz = imported_quiz_data.get('questions', [])
@@ -746,7 +753,7 @@ def quiz_import_api(request):
 
         # Add basic validation for title
         if not new_quiz.get('title'):
-            new_quiz['title'] = "Imported Quiz" # Default title
+            new_quiz['title'] = f"Imported_Quiz_{timestamp}"
 
         # Reset potentially sensitive/runtime data? (e.g., versions)
         new_quiz['versions'] = []
