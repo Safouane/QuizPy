@@ -98,6 +98,7 @@
     let allowBack = true;               // Whether back navigation is allowed in one-by-one
     let autoSaveInterval = null;        // Holds the interval ID for periodic auto-save
     let submissionInProgress = false;   // Flag to prevent double submissions
+    let allQuestionsAnswered = false; // Track overall answered status
 
 
     // --- DOM Elements ---
@@ -331,6 +332,10 @@
             quizStartTime = isResuming ? (savedState?.lastSaved ? determineOriginalStartTime(savedState) : Date.now()) : Date.now();
             console.log("DEBUG: Estimated quizStartTime:", new Date(quizStartTime));
 
+            // --- Initial Submit Button State ---
+            updateSubmitButtonState(); // <<< SET INITIAL STATE HERE
+
+
             // Hide loading spinner and show the main quiz content
             quizLoadingDiv.classList.add('d-none');
             quizContainerDiv.classList.remove('d-none');
@@ -360,6 +365,8 @@
                  if (submitButton) {
                     submitButton.style.display = 'inline-block';
                      submitButton.disabled = submissionInProgress || (quizData.questions.length === 0);
+                     updateSubmitButtonState(); // Set enabled/disabled based on answers
+
                  }
             }
              console.log("DEBUG: Initialization complete. UI should be ready.");
@@ -555,6 +562,8 @@
         studentAnswers[questionId] = answer;
         // console.log("Saved Answer for", questionId, ":", answer); // Can be noisy
         saveQuizState(); // Trigger save
+        updateSubmitButtonState(); // <<< ADD THIS CALL
+
     }
 
     /**
@@ -609,6 +618,8 @@
             nextButton.style.display = 'none';
             submitButton.style.display = 'inline-block';
             submitButton.disabled = submissionInProgress;
+            updateSubmitButtonState(); // <<< UPDATE SUBMIT STATE HERE TOO
+
         } else {
             nextButton.style.display = 'inline-block';
             nextButton.disabled = submissionInProgress;
@@ -704,6 +715,15 @@
             console.log(">>> DEBUG: Submission already in progress, ignoring submit call.");
             return;
         }
+
+        // --- ADD CHECK: Bypass answer check only if time is up ---
+        if (!isTimeUp && !checkAllQuestionsAnswered()) {
+          console.warn("DEBUG: Manual submit attempted but not all questions answered.");
+          alert("Please answer all questions before submitting.");
+          return; // Prevent manual submission
+     }
+     // --- END CHECK ---
+
         submissionInProgress = true;
         console.log(">>> DEBUG: Set submissionInProgress = true");
         console.log("DEBUG: submitQuiz called. Time up:", isTimeUp);
@@ -843,22 +863,31 @@
      * the spinner on the submit button.
      * @param {boolean} isLoading - True to disable buttons/show spinner, false otherwise.
      */
-    function setButtonState(isLoading) {
-        if (submitButton) submitButton.disabled = isLoading;
-        if (prevButton) prevButton.disabled = isLoading;
-        if (nextButton) nextButton.disabled = isLoading;
+    // --- REVISED setButtonState ---
+function setButtonState(isLoading) {
+    // Update main loading flag
+    submissionInProgress = isLoading; // Assume call to setButtonState implies loading state change
 
-        if(submitSpinner){
-           if(isLoading) {
-               submitSpinner.classList.remove('d-none');
-           } else {
-               submitSpinner.classList.add('d-none');
-           }
-        } else {
-             // Only log warning once perhaps
-             // console.warn("DEBUG: Submit spinner element not found.");
-        }
+    // Always disable Prev/Next during submit process
+    if (prevButton) prevButton.disabled = isLoading;
+    if (nextButton) nextButton.disabled = isLoading;
+
+    // Handle Submit button state
+    if (submitButton) {
+         // Check answered status *unless* we are currently loading (submitting)
+         const allowSubmit = isLoading ? false : checkAllQuestionsAnswered();
+         submitButton.disabled = !allowSubmit;
+         console.log(`DEBUG: setButtonState(${isLoading}) -> Submit button disabled: ${submitButton.disabled}`);
+
+         if(submitSpinner){
+            if(isLoading) {
+                submitSpinner.classList.remove('d-none');
+            } else {
+                submitSpinner.classList.add('d-none');
+            }
+         }
     }
+}
 
     /**
      * Helper function to get CSRF token from cookies (if needed).
@@ -969,5 +998,98 @@
               else { quizLoadingDiv.classList.add('d-none'); }
           }
      }
+
+
+    /**
+     * Checks if all questions currently loaded in quizData have a valid and meaningful
+     * answer entry in the studentAnswers object based on question type.
+     * - MCQ: Requires at least one option selected.
+     * - SHORT_TEXT: Requires the answer string not be empty after trimming whitespace.
+     * - Other types: Currently assumed answered if any entry exists.
+     * @returns {boolean} True if all questions have a valid answer, false otherwise.
+     */
+     function checkAllQuestionsAnswered() {
+        // Ensure necessary data structures are available
+        if (!quizData || !quizData.questions || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
+            console.log("DEBUG CheckAnswered: Quiz data or questions array is missing or empty.");
+            return false; // Cannot determine if all are answered if there are no questions or data is invalid
+        }
+
+        const totalQuestions = quizData.questions.length;
+        let answeredCount = 0; // Counter for questions considered answered
+
+        console.log("DEBUG CheckAnswered: Starting check for", totalQuestions, "questions.");
+
+        // Iterate through each question defined in the quiz structure
+        for (const question of quizData.questions) {
+            const questionId = question.id; // Get the ID for lookups and logging
+            const questionType = question.type; // Get the type for specific checks
+            const answer = studentAnswers[questionId]; // Get the student's answer from state
+            let isConsideredAnswered = false; // Flag for the current question
+
+            // First, check if an answer entry exists at all (key is present and value is not undefined/null)
+            if (studentAnswers.hasOwnProperty(questionId) && answer !== undefined && answer !== null) {
+
+                // Apply type-specific logic to determine if the existing answer counts as "answered"
+                switch (questionType) {
+                    case 'MCQ':
+                        // For Multiple Choice, check if the answer is an array and has at least one selected option ID.
+                        isConsideredAnswered = Array.isArray(answer) && answer.length > 0;
+                        // Log details specific to MCQ check
+                        // console.log(`DEBUG CheckAnswered: MCQ [${questionId}] | Answer: ${JSON.stringify(answer)} | Is Array: ${Array.isArray(answer)} | Length > 0: ${Array.isArray(answer) && answer.length > 0} | Result: ${isConsideredAnswered}`);
+                        break;
+
+                    case 'SHORT_TEXT':
+                        // For Short Text, check if the answer is a string and not just whitespace.
+                        isConsideredAnswered = typeof answer === 'string' && answer.trim().length > 0;
+                        // Log details specific to Short Text check
+                        // console.log(`DEBUG CheckAnswered: SHORT_TEXT [${questionId}] | Answer: "${answer}" | Is String: ${typeof answer === 'string'} | Trimmed Length > 0: ${typeof answer === 'string' && answer.trim().length > 0} | Result: ${isConsideredAnswered}`);
+                        // Note: If submitting an empty string IS considered a valid answer, change this to:
+                        // isConsideredAnswered = typeof answer === 'string';
+                        break;
+
+                    // Add cases for other question types here if they have specific "answered" criteria
+                    // case 'MEDIA':
+                    //     // How is media answered? If it always pairs with another type, maybe no check needed here?
+                    //     // If it requires interaction (e.g., clicking something), check for that interaction state.
+                    //     isConsideredAnswered = true; // Placeholder: Assume answered if key exists
+                    //     break;
+
+                    default:
+                        // For unknown or simple types, consider any non-null/undefined entry as answered.
+                        isConsideredAnswered = true;
+                        // console.log(`DEBUG CheckAnswered: Default Type [${questionId}] | Answer: ${answer} | Result: ${isConsideredAnswered}`);
+                        break;
+                }
+            } else {
+                 // Log if no entry was found for this question ID
+                 // console.log(`DEBUG CheckAnswered: No answer entry found for Q [${questionId}]`);
+                 isConsideredAnswered = false;
+            }
+
+            // If the question is considered answered according to its type's logic, increment count
+            if (isConsideredAnswered) {
+                answeredCount++;
+            }
+        } // End loop through questions
+
+        // Final log and result
+        console.log(`DEBUG CheckAnswered: Final Count - Answered: ${answeredCount} / Total: ${totalQuestions}`);
+        return answeredCount === totalQuestions; // Return true only if all questions met their answered criteria
+    }
+
+
+
+    function updateSubmitButtonState() {
+    if (!submitButton) return; // Safety check
+
+    allQuestionsAnswered = checkAllQuestionsAnswered(); // Update global flag
+    // Enable submit only if NOT currently submitting AND all questions have an answer entry
+    submitButton.disabled = submissionInProgress || !allQuestionsAnswered;
+    console.log(`DEBUG: Submit button disabled: ${submitButton.disabled} (submissionInProgress: ${submissionInProgress}, allAnswered: ${allQuestionsAnswered})`);
+    }
+
+
+
 </script>
 {% endblock %}
