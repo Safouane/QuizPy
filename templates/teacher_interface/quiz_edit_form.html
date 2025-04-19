@@ -60,6 +60,12 @@
     {# --- Questions Section --- #}
     <div class="mb-3">
         <h4>Questions in this Quiz</h4>
+        {# --- ADDED REFRESH BUTTON --- #}
+        <button type="button" id="refreshQuestionsBtn" class="btn btn-sm btn-outline-secondary"
+            title="Refresh list after creating questions in another tab">
+            <i class="bi bi-arrow-clockwise"></i> Refresh List
+        </button>
+        {# --- END ADDED --- #}
         <div id="associatedQuestionsList" class="list-group mb-2">
             {# Associated questions will be loaded here by JS #}
             {# This node will be cloned if needed #}
@@ -831,6 +837,20 @@
 
             // --- Attach Event Listeners (Common to both modes) ---
             console.log("DEBUG: Attaching common event listeners...");
+
+            // --- ADD REFRESH LISTENER ---
+            if (refreshQuestionsBtn) {
+                // Disable refresh button initially if in CREATE mode or no quizId
+                refreshQuestionsBtn.disabled = !quizId;
+                refreshQuestionsBtn.addEventListener('click', () => {
+                    console.log("DEBUG: Refresh questions list clicked.");
+                    // Show some temporary loading state? Optional.
+                    fetchAndDisplayAssociatedQuestions(); // Call existing function
+                });
+                console.log("DEBUG: Attached click listener to refreshQuestionsBtn.");
+            } else {
+                console.error("ERROR: refreshQuestionsBtn not found!");
+            }
 
             // Form submission listener
             if (quizForm) {
