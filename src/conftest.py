@@ -1,17 +1,19 @@
-# --- Fixtures ---# src/conftest.py
+# src/conftest.py
 import pytest
 import json
 import os
 import shutil
 from pathlib import Path
-from unittest.mock import patch
-import copy
-import uuid
-import time # For potential delay debugging if needed
+import copy # For deep copies
+import uuid # For generating UUIDs
+# NOTE: unittest.mock is NOT imported here anymore, patching happens in test files
 
+from unittest.mock import patch # Need this for the target object below
+import core.json_storage # Import the target module
 
-# --- Define BASELINE_TEST_DATA (with UUIDs and lists) ---
-# (Keep the UUID-updated version from previous steps)
+# --- Generate Consistent UUIDs for Baseline Data ---
+# Generate once so IDs are consistent if baseline_test_data fixture is used multiple times
+# They will still be different each time pytest starts.
 quiz_1_id = str(uuid.uuid4())
 q_mcq_1_id = str(uuid.uuid4())
 q_st_1_id = str(uuid.uuid4())
@@ -21,104 +23,151 @@ opt_b_id = str(uuid.uuid4())
 opt_x_id = str(uuid.uuid4())
 opt_y_id = str(uuid.uuid4())
 
+# --- Define the Baseline Test Data Structure ---
+# Using LISTS [] for all collections intended to be JSON arrays.
+# Using UUID strings for all IDs.
+# Ensuring 'config' is a dictionary {}.
 BASELINE_TEST_DATA = {
     "quizzes": [
         {
-            "id": quiz_1_id, "title": "Baseline Quiz 1", "description": "For testing.",
-            "questions": [q_mcq_1_id, q_st_1_id],
-            "config": {"duration": 10, "pass_score": 50, "presentation_mode": "all", "allow_back": True, "randomize_questions": False, "shuffle_answers": False},
-            "access_key": "KEY123", "archived": False, "versions": []
+            "id": quiz_1_id, # UUID String
+            "title": "Baseline Quiz 1",
+            "description": "For testing.",
+            "questions": [q_mcq_1_id, q_st_1_id], # LIST of question UUID Strings
+            "config": { # CONFIG MUST BE A DICTIONARY {}
+                "duration": 10,
+                "pass_score": 50,
+                "presentation_mode": "all",
+                "allow_back": True,
+                "randomize_questions": False,
+                "shuffle_answers": False
+            },
+            "access_key": "KEY123",
+            "archived": False,
+            "versions": [] # List for versions
         }
+        # Add more baseline quizzes if needed for other tests
     ],
     "questions": [
         {
-            "id": q_mcq_1_id, "quiz_ids": [quiz_1_id], "text": "MCQ Question 1?", "type": "MCQ",
-            "options": [{"id": opt_a_id, "text": "A"}, {"id": opt_b_id, "text": "B"}],
-            "correct_answer": [opt_b_id], "score": 10, "difficulty": "Easy", "category": "Test",
-             "media_url": None, "short_answer_review_mode": "manual", "short_answer_correct_text": None
+            "id": q_mcq_1_id, # UUID String
+            "quiz_ids": [quiz_1_id], # LIST of quiz UUID Strings
+            "text": "MCQ Question 1?",
+            "type": "MCQ",
+            "options": [ # LIST of option dictionaries
+                {"id": opt_a_id, "text": "A"}, # Option ID is UUID String
+                {"id": opt_b_id, "text": "B"}  # Option ID is UUID String
+            ],
+            "correct_answer": [opt_b_id], # LIST containing correct option UUID String(s)
+            "score": 10, # Use integer for score
+            "difficulty": "Easy",
+            "category": "Test",
+            "media_url": None,
+            "short_answer_review_mode": "manual",
+            "short_answer_correct_text": None,
+            "mcq_is_single_choice": False # Explicitly add flag
         },
         {
-            "id": q_st_1_id, "quiz_ids": [quiz_1_id], "text": "Short Text Question 1?", "type": "SHORT_TEXT",
-            "options": [], "correct_answer": [], "score": 5, "difficulty": "Medium", "category": "Test",
-            "media_url": None, "short_answer_review_mode": "manual", "short_answer_correct_text": None
+            "id": q_st_1_id, # UUID String
+            "quiz_ids": [quiz_1_id], # LIST of quiz UUID Strings
+            "text": "Short Text Question 1?",
+            "type": "SHORT_TEXT",
+            "options": [], # Empty LIST for non-MCQ
+            "correct_answer": [], # Empty LIST for non-MCQ
+            "score": 5, # Use integer for score
+            "difficulty": "Medium",
+            "category": "Test",
+            "media_url": None,
+            "short_answer_review_mode": "manual",
+            "short_answer_correct_text": None,
+            "mcq_is_single_choice": False # Flag relevant? Add default anyway
         },
-        {
-            "id": q_bank_1_id, "quiz_ids": [], "text": "Bank Question?", "type": "MCQ",
-            "options": [{"id": opt_x_id, "text": "X"}, {"id": opt_y_id, "text": "Y"}],
-            "correct_answer": [opt_x_id], "score": 2, "difficulty": "Hard", "category": "Bank",
-            "media_url": None, "short_answer_review_mode": "manual", "short_answer_correct_text": None
+        { # Standalone question for bank tests
+            "id": q_bank_1_id, # UUID String
+            "quiz_ids": [], # Empty LIST
+            "text": "Bank Question?",
+            "type": "MCQ",
+            "options": [ # LIST of option dictionaries
+                 {"id": opt_x_id, "text": "X"}, # Option ID is UUID String
+                 {"id": opt_y_id, "text": "Y"}  # Option ID is UUID String
+            ],
+            "correct_answer": [opt_x_id], # LIST containing correct option UUID String(s)
+            "score": 2, # Use integer for score
+            "difficulty": "Hard",
+            "category": "Bank",
+            "media_url": None,
+            "short_answer_review_mode": "manual",
+            "short_answer_correct_text": None,
+            "mcq_is_single_choice": False
         }
     ],
-    "attempts": []
+    "attempts": [] # Empty LIST for attempts
 }
 # --- End BASELINE_TEST_DATA ---
 
-@pytest.fixture(scope='session')
+
+# --- Fixtures ---
+
+@pytest.fixture(scope='session') # Session scope means BASELINE_TEST_DATA is copied once per session
 def baseline_test_data():
+    """Provides a deep copy of the baseline dictionary for tests to use."""
+    print("\n[Fixture baseline_test_data] Creating deep copy for session.")
     return copy.deepcopy(BASELINE_TEST_DATA)
 
-@pytest.fixture(scope='function', autouse=True)
-def isolated_json_storage(tmp_path, monkeypatch, baseline_test_data):
-    temp_data_path = tmp_path / "test_quiz_data.json"
-    print(f"\n[Fixture Start] Test: {os.environ.get('PYTEST_CURRENT_TEST')}, Path: {temp_data_path}")
+@pytest.fixture(scope='function', autouse=True) # Add autouse back
+def isolated_json_storage(tmp_path, monkeypatch, baseline_test_data): # Renamed back
+    """
+    Pytest fixture using monkeypatch to redirect core.json_storage functions
+    to use a temporary file for test isolation.
+    Applies autouse=True to run for all tests in modules that can see it.
+    """
+    temp_file = tmp_path / f"test_data_{uuid.uuid4()}.json"
+    current_test_name = os.environ.get('PYTEST_CURRENT_TEST', 'unknown test').split(':')[-1].split(' ')[0]
+    print(f"\n[Fixture Start] Test: {current_test_name}, Temp File: {temp_file}")
 
     # Write baseline data initially
+    initial_data = copy.deepcopy(baseline_test_data)
     try:
-        with open(temp_data_path, 'w') as f:
-            json.dump(baseline_test_data, f, indent=2)
-        print(f"[Fixture Write Baseline] Success. Quizzes: {len(baseline_test_data.get('quizzes',[]))}")
+        with open(temp_file, 'w') as f:
+            json.dump(initial_data, f, indent=2)
+        print(f"[Fixture Write Baseline] Wrote {len(initial_data.get('quizzes',[]))} quizzes.")
     except Exception as e:
-        print(f"[Fixture Write Baseline] ERROR: {e}")
-        pytest.fail(f"Fixture failed to write baseline data: {e}") # Fail fast if setup fails
+        pytest.fail(f"Fixture failed to write baseline data: {e}")
 
-    # --- Define Mocks referencing the specific temp_data_path of this fixture instance ---
-    current_test_file_path = temp_data_path # Capture path for mocks
-
-    def mock_load_data():
-        test_name = os.environ.get('PYTEST_CURRENT_TEST', 'unknown test')
-        print(f"[Mock Load] Attempting read from: {current_test_file_path} (test: {test_name})")
-        if not current_test_file_path.exists():
-            print("[Mock Load] File does not exist! Returning baseline copy.")
-            return copy.deepcopy(baseline_test_data)
+    # --- Mocks that interact with the specific temp_file ---
+    def mock_load_data_from_file():
+        print(f"[Mock Load] Reading from {temp_file} (Test: {current_test_name})")
+        if not temp_file.exists(): return copy.deepcopy(baseline_test_data)
         try:
-            # Explicitly open and read the file *every time* load is called
-            with open(current_test_file_path, 'r') as f:
-                loaded_data = json.load(f)
-            print(f"[Mock Load] Success. Quizzes loaded: {len(loaded_data.get('quizzes',[]))}")
-            return loaded_data # Return fresh content from file
+            with open(temp_file, 'r') as f: data = json.load(f)
+            print(f"[Mock Load] Success. Loaded {len(data.get('quizzes', []))} quizzes.")
+            return data
         except Exception as e:
-             print(f"[Mock Load] Error reading/parsing file: {e}. Returning baseline copy.")
+             print(f"[Mock Load] ERROR reading file {e}. Returning baseline copy.")
              return copy.deepcopy(baseline_test_data)
 
-    def mock_save_data(data_to_save):
-        test_name = os.environ.get('PYTEST_CURRENT_TEST', 'unknown test')
-        print(f"[Mock Save] Attempting write to: {current_test_file_path} (test: {test_name})")
-        print(f"[Mock Save] Data to save has {len(data_to_save.get('quizzes',[]))} quizzes.")
+    def mock_save_data_to_file(data_to_save):
+        print(f"[Mock Save] Writing to {temp_file} (Test: {current_test_name})")
+        print(f"[Mock Save] Data has {len(data_to_save.get('quizzes',[]))} quizzes.")
         try:
-             # Explicitly open, write, and close the file *every time* save is called
-             with open(current_test_file_path, 'w') as f:
-                json.dump(data_to_save, f, indent=2)
+             with open(temp_file, 'w') as f: json.dump(data_to_save, f, indent=2)
              print(f"[Mock Save] Successfully wrote data to file.")
-             # Optional: Short delay sometimes helps file system catch up in tests
-             # time.sleep(0.01)
-        except Exception as e:
-             print(f"[Mock Save] Error writing file: {e}")
-             # Consider failing the test if save fails
-             # pytest.fail(f"Mock save failed: {e}")
+        except Exception as e: print(f"[Mock Save] ERROR writing file: {e}")
 
 
-    monkeypatch.setattr('core.json_storage.load_data', mock_load_data)
-    monkeypatch.setattr('core.json_storage.save_data', mock_save_data)
-    print("[Fixture] Patched core.json_storage functions.")
+    # --- Use monkeypatch to replace functions *where they are imported/used* ---
+    # Assuming your views in src/quiz/views.py do "from core.json_storage import load_data, save_data"
+    # Patch the functions within the 'quiz.views' module scope.
+    # If other modules also use these, patch them there too if needed for other tests.
+    monkeypatch.setattr('quiz.views.load_data', mock_load_data_from_file)
+    monkeypatch.setattr('quiz.views.save_data', mock_save_data_to_file)
+    # --- Also patch where the test file might call it directly ---
+    monkeypatch.setattr(core.json_storage, 'load_data', mock_load_data_from_file)
+    monkeypatch.setattr(core.json_storage, 'save_data', mock_save_data_to_file)
 
-    yield temp_data_path # Test runs here
+    print("[Fixture] Patched json_storage functions in quiz.views and core.json_storage.")
 
-    print(f"[Fixture Teardown] Test finished for {current_test_file_path}")
-    # Add final check of file content on teardown for debugging
-    if current_test_file_path.exists():
-        try:
-            with open(current_test_file_path, 'r') as f:
-                final_data = json.load(f)
-            print(f"[Fixture Teardown] Final quiz count in file: {len(final_data.get('quizzes', []))}")
-        except Exception as e:
-            print(f"[Fixture Teardown] Error reading final file state: {e}")
+    yield temp_file # Test runs here
+
+    print(f"[Fixture Teardown] Test {current_test_name} finished.")
+    # No need to manually restore, monkeypatch handles it.

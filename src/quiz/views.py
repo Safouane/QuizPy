@@ -12,6 +12,8 @@ from decimal import Decimal, ROUND_HALF_UP # For accurate score calculation
 import openpyxl # Add import
 from openpyxl.utils import get_column_letter # Optional: For setting column widths
 import copy
+import random
+import string
 
 
 # Import the decorator we created in AUTH-3
@@ -1335,3 +1337,54 @@ def export_quiz_attempts_excel_api(request, quiz_id):
     except Exception as e:
          print(f"Error exporting Excel results for quiz {quiz_id}: {e}")
          return JsonResponse({'error': 'Failed to generate Excel export.'}, status=500)
+
+
+# Helper function (can be moved to utils if desired)
+def generate_quiz_key(length=6):
+    characters = string.ascii_uppercase + string.digits
+    # Ensure reasonable uniqueness? Simple random for now.
+    return ''.join(random.choice(characters) for i in range(length))
+
+@api_teacher_required
+@require_http_methods(["POST"]) # Use POST for action that modifies data
+def quiz_regenerate_key_api(request, quiz_id):
+    """
+    API endpoint for regenerating the access key for a specific quiz.
+    """
+    try:
+        data = load_data()
+        quizzes = data.get('quizzes', [])
+        quiz_to_update = None
+        quiz_index = -1
+
+        # Find the quiz
+        for index, q in enumerate(quizzes):
+            if str(q.get('id')) == str(quiz_id):
+                quiz_to_update = q
+                quiz_index = index
+                break
+
+        if quiz_to_update is None:
+            return JsonResponse({'error': f'Quiz with ID {quiz_id} not found.'}, status=404)
+
+        # Generate a new key
+        new_key = generate_quiz_key()
+        # TODO: Optional - Add check here to ensure new_key isn't already used by another *active* quiz
+
+        print(f"DEBUG [Regen Key]: Regenerating key for quiz {quiz_id}. Old: {quiz_to_update.get('access_key')}, New: {new_key}")
+
+        # Update the quiz object
+        quiz_to_update['access_key'] = new_key
+        quizzes[quiz_index] = quiz_to_update # Place updated quiz back in list
+        data['quizzes'] = quizzes
+
+        # Save the entire data structure back
+        save_data(data)
+
+        return JsonResponse({'message': 'Access key regenerated successfully.', 'new_key': new_key})
+
+    except Exception as e:
+        print(f"Error regenerating key for quiz {quiz_id}: {e}")
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)

@@ -24,6 +24,8 @@ urlpatterns = [
     # --- Submission URL ---
     # POST /api/quizzes/{quiz_id}/submit/
     path('api/quizzes/<uuid:quiz_id>/submit/', views.quiz_submit_api, name='quiz_submit'),
+    # --- Regenerate Key URL ---
+    path('api/quizzes/<uuid:quiz_id>/regenerate_key/', views.quiz_regenerate_key_api, name='quiz_regenerate_key'),
 
     # --- Attempt List & Export URLs ---
     path('api/quizzes/<uuid:quiz_id>/attempts/', views.get_quiz_attempts_api, name='quiz_attempts_list'),
