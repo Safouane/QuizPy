@@ -1,86 +1,185 @@
-{% extends "base.html" %} {# Or potentially a simpler base for students? Using main one for now #}
+{{% extends "base.html" %} {# Or a simpler student base template if you created one #}
 {% load static %}
 
 {% block title %}Taking Quiz - QuizPy{% endblock %}
 
 {% block extra_head %}
-    {{ block.super }}
-    {# Optional: Add custom CSS for quiz layout if needed #}
+    {{ block.super }} {# Includes base template's extra_head content #}
+    {# Add Bootstrap Icons if not already in base.html block #}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+
     <style>
-        /* Minimal styling for better focus */
-        /* body { background-color: #f8f9fa; } */
-        #quizContainer { max-width: 800px; margin: auto; }
-        .question-card { margin-bottom: 1.5rem; }
-        /* Hide base navbar/footer? */
-        /* nav.navbar, footer { display: none; } */
+        /* Ensure body/html have height for potentially sticky footer if base template uses it */
+        html, body { height: 100%; }
+        body {
+            /* Add padding top equal to or greater than the sticky header's height */
+            /* Adjust this value based on the final measured header height */
+            padding-top: 150px; /* Start with a generous value, fine-tune later */
+            background-color: #f8f9fa; /* Optional: Light background for quiz page */
+        }
+
+        /* Sticky Header Styling */
+        #quizHeader {
+            position: fixed; /* Make it fixed position */
+            top: 0;          /* Stick it to the top */
+            left: 0;
+            right: 0;
+            z-index: 1020;   /* Ensure it's above most other content */
+            background-color: #ffffff; /* White background */
+            border-bottom: 1px solid #dee2e6; /* Subtle separator line */
+            padding: 0.75rem 0; /* Vertical padding */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Optional subtle shadow */
+        }
+
+        /* Container within the sticky header to control width and padding */
+        #quizHeader .container-header { /* Use a distinct class name */
+             max-width: 900px; /* Match max-width of quiz content area or slightly wider */
+             margin-left: auto;
+             margin-right: auto;
+             padding-left: 15px;  /* Standard Bootstrap container padding */
+             padding-right: 15px;
+        }
+
+        /* Big Timer Styling */
+        #quizTimer {
+            font-size: 2rem;    /* Larger font size */
+            font-weight: 700;   /* Bold */
+            color: #198754;     /* Initial color (Bootstrap success green) */
+            min-width: 90px;    /* Ensure space for MM:SS */
+            text-align: right;  /* Align timer to the right within its container */
+            line-height: 1.2;   /* Adjust line height if needed */
+            transition: color 0.3s ease-in-out; /* Smooth color transition */
+        }
+        /* Style for low time warning */
+        #quizTimer.text-danger {
+             color: #dc3545 !important; /* Bootstrap danger red */
+        }
+        /* Style for Time's Up */
+         #quizTimer.text-warning {
+             color: #ffc107 !important; /* Bootstrap warning yellow */
+        }
+
+        /* Adjustments for header content layout */
+        #quizHeader h4 { font-size: 1.25rem; } /* Slightly smaller title */
+        #quizHeader .progress { height: 8px; } /* Slightly thinner progress bar */
+        #studentInfoDisplay { font-size: 0.8rem; } /* Smaller student info */
+
+
+        /* Main quiz container adjustments */
+        #quizContainer {
+            max-width: 800px; /* Control width of questions area */
+            margin-left: auto;
+            margin-right: auto;
+            padding-top: 1.5rem; /* Space below sticky header */
+            padding-bottom: 1rem; /* Space above footer/nav */
+        }
+        .question-card {
+             margin-bottom: 1.75rem; /* Increase spacing between cards */
+        }
+        .question-options .list-group-item {
+             cursor: pointer; /* Indicate options are clickable */
+        }
+        .question-options .list-group-item:hover {
+             background-color: #f8f9fa; /* Subtle hover on options */
+        }
+
+        /* Optional: Hide base template navbar/footer for focus */
+        /*
+        nav.navbar.navbar-expand-lg, footer.footer {
+             display: none !important;
+        }
+        body { padding-top: 150px !important; } // Adjust padding if navbar hidden
+        */
+
     </style>
 {% endblock %}
 
 
 {% block content %}
-<div id="quizLoading" class="text-center my-5">
-    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading Quiz...</span></div>
-    <p>Loading Quiz...</p>
-</div>
+{# Main container for the whole quiz taking UI #}
 
-<div id="quizError" class="alert alert-danger d-none">Error loading quiz data. Please try starting again.</div>
-
-{# Main Quiz Container - Hidden initially #}
-<div id="quizContainer" class="container mt-4 d-none">
-
-    {# Header: Title, Timer, Progress #}
-    <div class="card shadow-sm mb-4">
-        <div class="card-header bg-light d-flex justify-content-between align-items-center">
-             <h4 id="quizTitle" class="mb-0">Quiz Title</h4>
-             <div id="quizTimer" class="fw-bold fs-5 text-danger"></div> {# Timer display #}
-        </div>
-        <div class="card-body">
-            <div class="d-flex justify-content-between mb-1">
-                <span>Progress</span>
-                <span id="progressText">Question X of Y</span>
-            </div>
-            <div class="progress" style="height: 10px;">
-                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
-            </div>
-            <div id="studentInfoDisplay" class="mt-2 text-muted small"></div> {# Display student name #}
-        </div>
+    {# Loading State - Shown initially, hidden by JS #}
+    <div id="quizLoading" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading Quiz...</span></div>
+        <p class="mt-2">Loading Quiz...</p>
     </div>
 
-    {# Question Display Area #}
-    <div id="questionArea">
-        {# Questions will be rendered here by JavaScript #}
-        {# Example structure for one question card #}
-        <!--
-        <div class="card shadow-sm question-card" data-question-id="q_uuid_1" style="display: none;">
-            <div class="card-body">
-                <h5 class="card-title mb-3">Question 1: <span class="question-text">[Question Text Here]</span></h5>
-                <div class="question-media mb-3"></div>
-                <div class="question-options">
-                    // Options rendered here based on type (MCQ, Short Text)
+    {# Error State - Shown if JS encounters critical error #}
+    <div id="quizError" class="container mt-4 alert alert-danger d-none" style="max-width: 800px;">
+        Error loading quiz data. Please try starting again.
+    </div>
+
+
+    {# --- STICKY HEADER --- #}
+    <div id="quizHeader">
+        <div class="container-header"> {# Inner container for alignment & max-width #}
+            {# Top Row: Title and Timer #}
+            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+                 <h4 id="quizTitle" class="mb-0 me-3 text-primary">Quiz Title</h4> {# Quiz Title Placeholder #}
+                 <div id="quizTimer" class="" style="display: none;">00:00</div> {# Timer display - initially hidden #}
+            </div>
+            {# Bottom Row: Progress Bar and Student Info #}
+            <div>
+                 <div class="d-flex justify-content-between mb-1 small text-muted">
+                     <span>Progress</span>
+                     <span id="progressText">Question X of Y</span> {# Progress Text Placeholder #}
+                 </div>
+                 <div class="progress" style="height: 8px;">
+                     <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div> {# Progress Bar #}
+                 </div>
+                 <div id="studentInfoDisplay" class="mt-1 text-muted">Student(s): Loading...</div> {# Student Info Placeholder #}
+            </div>
+        </div>
+    </div>
+    {# --- END STICKY HEADER --- #}
+
+
+    {# Main Quiz Content Area - Hidden initially until loading complete #}
+    {# Note: No margin-top needed as body padding handles space below header #}
+    <div id="quizContainer" class="container d-none">
+
+        {# Question Display Area - Populated by JS #}
+        <div id="questionArea">
+            {# Example structure for one question card (for reference, JS builds this) #}
+            <!--
+            <div class="card shadow-sm question-card" data-question-id="q_uuid_1" style="display: none;">
+                <div class="card-body">
+                    <h5 class="card-title mb-3">Question 1: <span class="question-text">[Question Text Here]</span></h5>
+                    <div class="question-media mb-3"></div> // Optional Media
+                    <div class="question-options">
+                        // Options rendered here based on type (MCQ, Short Text)
+                    </div>
                 </div>
             </div>
+            -->
         </div>
-        -->
-    </div>
 
-    {# Navigation Area #}
-    <div class="d-flex justify-content-between mt-4 mb-5">
-        <button id="prevButton" class="btn btn-secondary" style="display: none;"><i class="bi bi-arrow-left"></i> Previous</button>
-        <button id="nextButton" class="btn btn-primary">Next <i class="bi bi-arrow-right"></i></button>
-        <button id="submitButton" class="btn btn-success" style="display: none;">
-            {# --- ADD THIS SPINNER SPAN --- #}
-            <span class="spinner-border spinner-border-sm d-none me-1" role="status" aria-hidden="true"></span>
-            {# --- END ADD --- #}
-            <i class="bi bi-check-circle-fill"></i>
-            Submit Quiz
-        </button>    </div>
+        {# Navigation Buttons Area #}
+        <div class="d-flex justify-content-between mt-4 mb-5">
+            <button id="prevButton" class="btn btn-secondary btn-lg" style="display: none;">
+                <i class="bi bi-arrow-left"></i> Previous
+            </button>
+            {# Add spacer div to push next/submit right when prevButton is hidden #}
+            <div id="navSpacer" class="flex-grow-1" style="display: none;"></div>
+            <button id="nextButton" class="btn btn-primary btn-lg" style="display: none;">
+                Next <i class="bi bi-arrow-right"></i>
+            </button>
+            <button id="submitButton" class="btn btn-success btn-lg" style="display: none;">
+                 <span class="spinner-border spinner-border-sm d-none me-1" role="status" aria-hidden="true"></span>
+                 <i class="bi bi-check-circle-fill"></i>
+                 Submit Quiz
+            </button>
+        </div>
 
-</div> {# End Quiz Container #}
+    </div> {# End Quiz Container #}
 
 {% endblock %}
 
+
 {% block extra_scripts %}
-{{ block.super }}
+{{ block.super }} {# Includes base template's extra_scripts content #}
+
+
 <script>
     // --- Constants ---
     const quizId = "{{ quiz_id }}"; // Get quiz ID from Django context
@@ -117,7 +216,7 @@
     const submitSpinner = submitButton ? submitButton.querySelector('.spinner-border') : null;
     console.log("DEBUG: submitButton found:", submitButton); 
     console.log("DEBUG: submitSpinner found:", submitSpinner); 
-
+    const sessionAttemptId = "{{ session_attempt_id }}"; // <<< Ensure this is passed from view if using session IDs
 
     // --- Initialization ---
     document.addEventListener('DOMContentLoaded', initializeQuiz);
