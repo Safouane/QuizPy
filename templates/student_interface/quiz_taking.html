@@ -4,144 +4,193 @@
 {% block title %}Taking Quiz - QuizPy{% endblock %}
 
 {% block extra_head %}
-    {{ block.super }} {# Includes base template's extra_head content #}
-    {# Add Bootstrap Icons if not already in base.html block #}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{{ block.super }} {# Includes base template's extra_head content #}
+{# Add Bootstrap Icons if not already in base.html block #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 
-    <style>
-        /* Ensure body/html have height for potentially sticky footer if base template uses it */
-        html, body { height: 100%; }
-        body {
-            /* Add padding top equal to or greater than the sticky header's height */
-            /* Adjust this value based on the final measured header height */
-            padding-top: 150px; /* Start with a generous value, fine-tune later */
-            background-color: #f8f9fa; /* Optional: Light background for quiz page */
-        }
+<style>
+    /* Ensure body/html have height for potentially sticky footer if base template uses it */
+    html,
+    body {
+        height: 100%;
+    }
 
-        /* Sticky Header Styling */
-        #quizHeader {
-            position: fixed; /* Make it fixed position */
-            top: 0;          /* Stick it to the top */
-            left: 0;
-            right: 0;
-            z-index: 1020;   /* Ensure it's above most other content */
-            background-color: #ffffff; /* White background */
-            border-bottom: 1px solid #dee2e6; /* Subtle separator line */
-            padding: 0.75rem 0; /* Vertical padding */
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); /* Optional subtle shadow */
-        }
+    body {
+        /* Add padding top equal to or greater than the sticky header's height */
+        /* Adjust this value based on the final measured header height */
+        padding-top: 150px;
+        /* Start with a generous value, fine-tune later */
+        background-color: #f8f9fa;
+        /* Optional: Light background for quiz page */
+    }
 
-        /* Container within the sticky header to control width and padding */
-        #quizHeader .container-header { /* Use a distinct class name */
-             max-width: 900px; /* Match max-width of quiz content area or slightly wider */
-             margin-left: auto;
-             margin-right: auto;
-             padding-left: 15px;  /* Standard Bootstrap container padding */
-             padding-right: 15px;
-        }
+    /* Sticky Header Styling */
+    #quizHeader {
+        position: fixed;
+        /* Make it fixed position */
+        top: 0;
+        /* Stick it to the top */
+        left: 0;
+        right: 0;
+        z-index: 1020;
+        /* Ensure it's above most other content */
+        background-color: #ffffff;
+        /* White background */
+        border-bottom: 1px solid #dee2e6;
+        /* Subtle separator line */
+        padding: 0.75rem 0;
+        /* Vertical padding */
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        /* Optional subtle shadow */
+    }
 
-        /* Big Timer Styling */
-        #quizTimer {
-            font-size: 2rem;    /* Larger font size */
-            font-weight: 700;   /* Bold */
-            color: #198754;     /* Initial color (Bootstrap success green) */
-            min-width: 90px;    /* Ensure space for MM:SS */
-            text-align: right;  /* Align timer to the right within its container */
-            line-height: 1.2;   /* Adjust line height if needed */
-            transition: color 0.3s ease-in-out; /* Smooth color transition */
-        }
-        /* Style for low time warning */
-        #quizTimer.text-danger {
-             color: #dc3545 !important; /* Bootstrap danger red */
-        }
-        /* Style for Time's Up */
-         #quizTimer.text-warning {
-             color: #ffc107 !important; /* Bootstrap warning yellow */
-        }
+    /* Container within the sticky header to control width and padding */
+    #quizHeader .container-header {
+        /* Use a distinct class name */
+        max-width: 900px;
+        /* Match max-width of quiz content area or slightly wider */
+        margin-left: auto;
+        margin-right: auto;
+        padding-left: 15px;
+        /* Standard Bootstrap container padding */
+        padding-right: 15px;
+    }
 
-        /* Adjustments for header content layout */
-        #quizHeader h4 { font-size: 1.25rem; } /* Slightly smaller title */
-        #quizHeader .progress { height: 8px; } /* Slightly thinner progress bar */
-        #studentInfoDisplay { font-size: 0.8rem; } /* Smaller student info */
+    /* Big Timer Styling */
+    #quizTimer {
+        font-size: 2rem;
+        /* Larger font size */
+        font-weight: 700;
+        /* Bold */
+        color: #198754;
+        /* Initial color (Bootstrap success green) */
+        min-width: 90px;
+        /* Ensure space for MM:SS */
+        text-align: right;
+        /* Align timer to the right within its container */
+        line-height: 1.2;
+        /* Adjust line height if needed */
+        transition: color 0.3s ease-in-out;
+        /* Smooth color transition */
+    }
+
+    /* Style for low time warning */
+    #quizTimer.text-danger {
+        color: #dc3545 !important;
+        /* Bootstrap danger red */
+    }
+
+    /* Style for Time's Up */
+    #quizTimer.text-warning {
+        color: #ffc107 !important;
+        /* Bootstrap warning yellow */
+    }
+
+    /* Adjustments for header content layout */
+    #quizHeader h4 {
+        font-size: 1.25rem;
+    }
+
+    /* Slightly smaller title */
+    #quizHeader .progress {
+        height: 8px;
+    }
+
+    /* Slightly thinner progress bar */
+    #studentInfoDisplay {
+        font-size: 0.8rem;
+    }
+
+    /* Smaller student info */
 
 
-        /* Main quiz container adjustments */
-        #quizContainer {
-            max-width: 800px; /* Control width of questions area */
-            margin-left: auto;
-            margin-right: auto;
-            padding-top: 1.5rem; /* Space below sticky header */
-            padding-bottom: 1rem; /* Space above footer/nav */
-        }
-        .question-card {
-             margin-bottom: 1.75rem; /* Increase spacing between cards */
-        }
-        .question-options .list-group-item {
-             cursor: pointer; /* Indicate options are clickable */
-        }
-        .question-options .list-group-item:hover {
-             background-color: #f8f9fa; /* Subtle hover on options */
-        }
+    /* Main quiz container adjustments */
+    #quizContainer {
+        max-width: 800px;
+        /* Control width of questions area */
+        margin-left: auto;
+        margin-right: auto;
+        padding-top: 1.5rem;
+        /* Space below sticky header */
+        padding-bottom: 1rem;
+        /* Space above footer/nav */
+    }
 
-        /* Optional: Hide base template navbar/footer for focus */
-        /*
+    .question-card {
+        margin-bottom: 1.75rem;
+        /* Increase spacing between cards */
+    }
+
+    .question-options .list-group-item {
+        cursor: pointer;
+        /* Indicate options are clickable */
+    }
+
+    .question-options .list-group-item:hover {
+        background-color: #f8f9fa;
+        /* Subtle hover on options */
+    }
+
+    /* Optional: Hide base template navbar/footer for focus */
+    /*
         nav.navbar.navbar-expand-lg, footer.footer {
              display: none !important;
         }
         body { padding-top: 150px !important; } // Adjust padding if navbar hidden
         */
-
-    </style>
+</style>
 {% endblock %}
 
 
 {% block content %}
 {# Main container for the whole quiz taking UI #}
 
-    {# Loading State - Shown initially, hidden by JS #}
-    <div id="quizLoading" class="text-center my-5">
-        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading Quiz...</span></div>
-        <p class="mt-2">Loading Quiz...</p>
-    </div>
+{# Loading State - Shown initially, hidden by JS #}
+<div id="quizLoading" class="text-center my-5">
+    <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading Quiz...</span></div>
+    <p class="mt-2">Loading Quiz...</p>
+</div>
 
-    {# Error State - Shown if JS encounters critical error #}
-    <div id="quizError" class="container mt-4 alert alert-danger d-none" style="max-width: 800px;">
-        Error loading quiz data. Please try starting again.
-    </div>
+{# Error State - Shown if JS encounters critical error #}
+<div id="quizError" class="container mt-4 alert alert-danger d-none" style="max-width: 800px;">
+    Error loading quiz data. Please try starting again.
+</div>
 
 
-    {# --- STICKY HEADER --- #}
-    <div id="quizHeader">
-        <div class="container-header"> {# Inner container for alignment & max-width #}
-            {# Top Row: Title and Timer #}
-            <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
-                 <h4 id="quizTitle" class="mb-0 me-3 text-primary">Quiz Title</h4> {# Quiz Title Placeholder #}
-                 <div id="quizTimer" class="" style="display: none;">00:00</div> {# Timer display - initially hidden #}
+{# --- STICKY HEADER --- #}
+<div id="quizHeader">
+    <div class="container-header"> {# Inner container for alignment & max-width #}
+        {# Top Row: Title and Timer #}
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap">
+            <h4 id="quizTitle" class="mb-0 me-3 text-primary">Quiz Title</h4> {# Quiz Title Placeholder #}
+            <div id="quizTimer" class="" style="display: none;">00:00</div> {# Timer display - initially hidden #}
+        </div>
+        {# Bottom Row: Progress Bar and Student Info #}
+        <div>
+            <div class="d-flex justify-content-between mb-1 small text-muted">
+                <span>Progress</span>
+                <span id="progressText">Question X of Y</span> {# Progress Text Placeholder #}
             </div>
-            {# Bottom Row: Progress Bar and Student Info #}
-            <div>
-                 <div class="d-flex justify-content-between mb-1 small text-muted">
-                     <span>Progress</span>
-                     <span id="progressText">Question X of Y</span> {# Progress Text Placeholder #}
-                 </div>
-                 <div class="progress" style="height: 8px;">
-                     <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div> {# Progress Bar #}
-                 </div>
-                 <div id="studentInfoDisplay" class="mt-1 text-muted">Student(s): Loading...</div> {# Student Info Placeholder #}
+            <div class="progress" style="height: 8px;">
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 0%;" aria-valuenow="0"
+                    aria-valuemin="0" aria-valuemax="100"></div> {# Progress Bar #}
             </div>
+            <div id="studentInfoDisplay" class="mt-1 text-muted">Student(s): Loading...</div> {# Student Info
+            Placeholder #}
         </div>
     </div>
-    {# --- END STICKY HEADER --- #}
+</div>
+{# --- END STICKY HEADER --- #}
 
 
-    {# Main Quiz Content Area - Hidden initially until loading complete #}
-    {# Note: No margin-top needed as body padding handles space below header #}
-    <div id="quizContainer" class="container d-none">
+{# Main Quiz Content Area - Hidden initially until loading complete #}
+{# Note: No margin-top needed as body padding handles space below header #}
+<div id="quizContainer" class="container d-none">
 
-        {# Question Display Area - Populated by JS #}
-        <div id="questionArea">
-            {# Example structure for one question card (for reference, JS builds this) #}
-            <!--
+    {# Question Display Area - Populated by JS #}
+    <div id="questionArea">
+        {# Example structure for one question card (for reference, JS builds this) #}
+        <!--
             <div class="card shadow-sm question-card" data-question-id="q_uuid_1" style="display: none;">
                 <div class="card-body">
                     <h5 class="card-title mb-3">Question 1: <span class="question-text">[Question Text Here]</span></h5>
@@ -152,26 +201,26 @@
                 </div>
             </div>
             -->
-        </div>
+    </div>
 
-        {# Navigation Buttons Area #}
-        <div class="d-flex justify-content-between mt-4 mb-5">
-            <button id="prevButton" class="btn btn-secondary btn-lg" style="display: none;">
-                <i class="bi bi-arrow-left"></i> Previous
-            </button>
-            {# Add spacer div to push next/submit right when prevButton is hidden #}
-            <div id="navSpacer" class="flex-grow-1" style="display: none;"></div>
-            <button id="nextButton" class="btn btn-primary btn-lg" style="display: none;">
-                Next <i class="bi bi-arrow-right"></i>
-            </button>
-            <button id="submitButton" class="btn btn-success btn-lg" style="display: none;">
-                 <span class="spinner-border spinner-border-sm d-none me-1" role="status" aria-hidden="true"></span>
-                 <i class="bi bi-check-circle-fill"></i>
-                 Submit Quiz
-            </button>
-        </div>
+    {# Navigation Buttons Area #}
+    <div class="d-flex justify-content-between mt-4 mb-5">
+        <button id="prevButton" class="btn btn-secondary btn-lg" style="display: none;">
+            <i class="bi bi-arrow-left"></i> Previous
+        </button>
+        {# Add spacer div to push next/submit right when prevButton is hidden #}
+        <div id="navSpacer" class="flex-grow-1" style="display: none;"></div>
+        <button id="nextButton" class="btn btn-primary btn-lg" style="display: none;">
+            Next <i class="bi bi-arrow-right"></i>
+        </button>
+        <button id="submitButton" class="btn btn-success btn-lg" style="display: none;">
+            <span class="spinner-border spinner-border-sm d-none me-1" role="status" aria-hidden="true"></span>
+            <i class="bi bi-check-circle-fill"></i>
+            Submit Quiz
+        </button>
+    </div>
 
-    </div> {# End Quiz Container #}
+</div> {# End Quiz Container #}
 
 {% endblock %}
 
@@ -214,8 +263,8 @@
     const nextButton = document.getElementById('nextButton');
     const submitButton = document.getElementById('submitButton');
     const submitSpinner = submitButton ? submitButton.querySelector('.spinner-border') : null;
-    console.log("DEBUG: submitButton found:", submitButton); 
-    console.log("DEBUG: submitSpinner found:", submitSpinner); 
+    console.log("DEBUG: submitButton found:", submitButton);
+    console.log("DEBUG: submitSpinner found:", submitSpinner);
     const sessionAttemptId = "{{ session_attempt_id }}"; // <<< Ensure this is passed from view if using session IDs
 
     // --- Initialization ---
@@ -225,20 +274,20 @@
     // Check if elements exist before adding listeners
     if (prevButton) {
         prevButton.addEventListener('click', () => {
-             console.log("DEBUG: Previous Button Clicked!"); // Log click
-             navigate(-1);
+            console.log("DEBUG: Previous Button Clicked!"); // Log click
+            navigate(-1);
         });
     } else {
-         console.error("Error: Previous button element ('prevButton') not found!");
+        console.error("Error: Previous button element ('prevButton') not found!");
     }
 
     if (nextButton) {
         nextButton.addEventListener('click', () => {
-             console.log("DEBUG: Next Button Clicked!"); // Log click
-             navigate(1);
+            console.log("DEBUG: Next Button Clicked!"); // Log click
+            navigate(1);
         });
     } else {
-         console.error("Error: Next button element ('nextButton') not found!");
+        console.error("Error: Next button element ('nextButton') not found!");
     }
 
     // Submit Button Listener
@@ -260,8 +309,8 @@
         // Attempt a final save *only if* submission isn't already in progress
         // This helps capture the very last state before closing.
         if (!submissionInProgress) {
-             console.log("DEBUG: Attempting final save before unload.");
-             saveQuizState();
+            console.log("DEBUG: Attempting final save before unload.");
+            saveQuizState();
         }
     });
 
@@ -286,7 +335,7 @@
      * - Starts the periodic auto-save interval.
      * - Handles errors during initialization.
      */
-     function initializeQuiz() {
+    function initializeQuiz() {
         console.log("Initializing quiz for ID:", quizId); // Log start with Quiz ID from template context
         try {
             // --- 1. Load Core Quiz Structure (Always required, from API-3 via STU-1) ---
@@ -303,18 +352,18 @@
             // --- 2. Validate Core Quiz Structure ---
             // Perform basic checks to ensure the loaded data is usable.
             if (!quizData || typeof quizData !== 'object') {
-                 throw new Error("Invalid core quiz data loaded (not an object).");
+                throw new Error("Invalid core quiz data loaded (not an object).");
             }
-             if (!quizData.id || !quizData.title || !Array.isArray(quizData.questions)) {
-                 console.error("DEBUG: Invalid quizData structure:", quizData);
-                 throw new Error("Loaded core quiz data structure is invalid (missing id, title, or questions array).");
-             }
-             // Also specifically check if questions is actually an array (JSON parse sometimes yields objects unexpectedly)
-             if (!Array.isArray(quizData.questions)) {
-                 console.error("DEBUG: quizData.questions is not an array:", quizData.questions);
-                 throw new Error("Loaded core quiz data 'questions' field is not an array.");
-             }
-             console.log("DEBUG: Core quiz data validated. Number of questions:", quizData.questions.length);
+            if (!quizData.id || !quizData.title || !Array.isArray(quizData.questions)) {
+                console.error("DEBUG: Invalid quizData structure:", quizData);
+                throw new Error("Loaded core quiz data structure is invalid (missing id, title, or questions array).");
+            }
+            // Also specifically check if questions is actually an array (JSON parse sometimes yields objects unexpectedly)
+            if (!Array.isArray(quizData.questions)) {
+                console.error("DEBUG: quizData.questions is not an array:", quizData.questions);
+                throw new Error("Loaded core quiz data 'questions' field is not an array.");
+            }
+            console.log("DEBUG: Core quiz data validated. Number of questions:", quizData.questions.length);
 
 
             // --- 3. Check for Resume State ---
@@ -329,13 +378,13 @@
             // --- 4. Load Student Info (Always required, from STU-1) ---
             console.log("DEBUG: Attempting to load student info from sessionStorage key: quizStudentInfo");
             const storedStudentInfo = sessionStorage.getItem('quizStudentInfo');
-             if (!storedStudentInfo) {
-                 // This shouldn't happen if STU-1 worked, but good to check.
-                 throw new Error("Student info not found in session storage. Please start the quiz again.");
-             }
-             // Parse and store in the global state variable. Could be an object or an array (for pairs).
-             studentInfo = JSON.parse(storedStudentInfo);
-             console.log("DEBUG: Parsed student info from sessionStorage:", studentInfo);
+            if (!storedStudentInfo) {
+                // This shouldn't happen if STU-1 worked, but good to check.
+                throw new Error("Student info not found in session storage. Please start the quiz again.");
+            }
+            // Parse and store in the global state variable. Could be an object or an array (for pairs).
+            studentInfo = JSON.parse(storedStudentInfo);
+            console.log("DEBUG: Parsed student info from sessionStorage:", studentInfo);
 
 
             // --- 5. Apply Saved State (from localStorage if resuming) OR Initialize Fresh State ---
@@ -373,20 +422,20 @@
                         console.log("DEBUG: Applied state from localStorage: Index=", currentQuestionIndex, "RemainingSecs=", remainingTimeSeconds);
 
                     } catch (e) {
-                         // Handle error parsing localStorage data - treat as fresh start
-                         console.error("Error parsing saved state from localStorage, starting fresh state.", e);
-                         localStorage.removeItem(storageKey); // Clear corrupt data
-                         studentAnswers = {};
-                         currentQuestionIndex = 0;
-                         savedState = null; // Ensure savedState is null if parse failed
-                         isResuming = false; // Treat as non-resuming now
+                        // Handle error parsing localStorage data - treat as fresh start
+                        console.error("Error parsing saved state from localStorage, starting fresh state.", e);
+                        localStorage.removeItem(storageKey); // Clear corrupt data
+                        studentAnswers = {};
+                        currentQuestionIndex = 0;
+                        savedState = null; // Ensure savedState is null if parse failed
+                        isResuming = false; // Treat as non-resuming now
                     }
                 } else {
-                     // Resume flag was set, but no data found in localStorage. Strange, but treat as fresh start.
-                     console.warn("DEBUG: Resume flag set, but no saved state found in localStorage. Starting fresh state.");
-                     studentAnswers = {};
-                     currentQuestionIndex = 0;
-                     isResuming = false; // Correct the flag
+                    // Resume flag was set, but no data found in localStorage. Strange, but treat as fresh start.
+                    console.warn("DEBUG: Resume flag set, but no saved state found in localStorage. Starting fresh state.");
+                    studentAnswers = {};
+                    currentQuestionIndex = 0;
+                    isResuming = false; // Correct the flag
                 }
             } else {
                 // Not resuming, this is a fresh start
@@ -411,11 +460,11 @@
             // Set Student Name(s) Display
             let nameDisplay = "Unknown";
             if (Array.isArray(studentInfo) && studentInfo.length > 0) {
-                 nameDisplay = studentInfo.map(s => escapeHTML(s?.name || 'N/A')).join(' & ');
+                nameDisplay = studentInfo.map(s => escapeHTML(s?.name || 'N/A')).join(' & ');
             } else if (typeof studentInfo === 'object' && studentInfo && studentInfo.name) {
-                 nameDisplay = escapeHTML(studentInfo.name);
+                nameDisplay = escapeHTML(studentInfo.name);
             } else {
-                 console.warn("DEBUG: Student info structure unexpected:", studentInfo);
+                console.warn("DEBUG: Student info structure unexpected:", studentInfo);
             }
             studentInfoDisplayDiv.textContent = `Student(s): ${nameDisplay}`;
 
@@ -460,31 +509,31 @@
                 // Set the initial state of navigation buttons for 'all' mode
                 prevButton.style.display = 'none';
                 nextButton.style.display = 'none';
-                 // Enable submit unless submission is already in progress (unlikely here) or no questions
-                 if (submitButton) {
+                // Enable submit unless submission is already in progress (unlikely here) or no questions
+                if (submitButton) {
                     submitButton.style.display = 'inline-block';
-                     submitButton.disabled = submissionInProgress || (quizData.questions.length === 0);
-                     updateSubmitButtonState(); // Set enabled/disabled based on answers
+                    submitButton.disabled = submissionInProgress || (quizData.questions.length === 0);
+                    updateSubmitButtonState(); // Set enabled/disabled based on answers
 
-                 }
+                }
             }
-             console.log("DEBUG: Initialization complete. UI should be ready.");
+            console.log("DEBUG: Initialization complete. UI should be ready.");
 
         } catch (error) {
-             // Catch any error during the entire initialization process
-             console.error("FATAL Error during quiz initialization:", error);
-             quizLoadingDiv.classList.add('d-none'); // Hide loading
-             quizErrorDiv.textContent = `Error initializing quiz: ${error.message}. Please try starting the quiz again.`;
-             quizErrorDiv.classList.remove('d-none'); // Show error
-             quizContainerDiv.classList.add('d-none'); // Hide the main container on critical error
-             // Stop any potential intervals if they somehow started
-             if (autoSaveInterval) clearInterval(autoSaveInterval);
-             if (timerInterval) clearInterval(timerInterval);
+            // Catch any error during the entire initialization process
+            console.error("FATAL Error during quiz initialization:", error);
+            quizLoadingDiv.classList.add('d-none'); // Hide loading
+            quizErrorDiv.textContent = `Error initializing quiz: ${error.message}. Please try starting the quiz again.`;
+            quizErrorDiv.classList.remove('d-none'); // Show error
+            quizContainerDiv.classList.add('d-none'); // Hide the main container on critical error
+            // Stop any potential intervals if they somehow started
+            if (autoSaveInterval) clearInterval(autoSaveInterval);
+            if (timerInterval) clearInterval(timerInterval);
         }
     } // End initializeQuiz
-    
-    
-    
+
+
+
     /**
      * Renders all question cards into the questionAreaDiv based on quizData.
      * Initially hides them if mode is one-by-one.
@@ -518,23 +567,45 @@
             // --- Render based on Question Type ---
             if (q.type === 'MCQ') {
                 optionsHtml = '<div class="list-group list-group-flush question-options">';
+                // --- CRITICAL CHECK: Access the flag correctly ---
+                // Ensure 'q' object actually HAS 'mcq_is_single_choice' from API-3 response data
+                const isSingleChoice = q.mcq_is_single_choice === true; // Explicit check for boolean true
+                const inputType = isSingleChoice ? 'radio' : 'checkbox';
+                // Radio buttons need a common name PER QUESTION to work as a group
+                const inputName = `q_${q.id}`; // Common name works for radios too
+
+                console.log(`DEBUG: Rendering MCQ Q${index + 1} (ID: ${q.id}). isSingleChoice: ${isSingleChoice}, inputType: ${inputType}`); // <<< ADD LOG
+
                 (q.options || []).forEach(opt => {
-                    const inputId = `q_${q.id}_opt_${opt.id}`;
-                    // Use radio buttons if only one correct answer is expected? Hard to know from data alone. Default to checkbox.
+                    if (!opt || typeof opt !== 'object') { // Safety check for option data
+                        console.warn("DEBUG: Skipping invalid option data:", opt);
+                        return; // Skip this option
+                    }
+                    const inputId = `q_${q.id}_opt_${opt.id}`; // Unique ID for label 'for'
+
+                    // Ensure option id and text exist
+                    const optionId = opt.id;
+                    const optionText = opt.text;
+                    if (optionId === undefined || optionText === undefined) {
+                        console.warn("DEBUG: Skipping option with missing id or text:", opt);
+                        return; // Skip this option
+                    }
+
                     optionsHtml += `
                         <label class="list-group-item" for="${inputId}">
                             <input class="form-check-input me-2 mcq-option"
-                                   type="checkbox"
-                                   name="q_${q.id}"
-                                   value="${opt.id}"
+                                   type="${inputType}"    {# <<< Use the determined inputType variable #}
+                                   name="${inputName}"     {# <<< Use the common name #}
+                                   value="${escapeHTML(String(optionId))}" {# <<< Ensure value is string #}
                                    id="${inputId}"
                                    data-question-id="${q.id}"
                                    onchange="saveAnswer(this)">
-                            ${escapeHTML(opt.text)}
+                            ${escapeHTML(String(optionText))} {# <<< Ensure text is string #}
                         </label>
                     `;
                 });
-                 optionsHtml += '</div>';
+                optionsHtml += '</div>';
+
             } else if (q.type === 'SHORT_TEXT') {
                 const inputId = `q_${q.id}_ans`;
                 optionsHtml = `
@@ -549,11 +620,11 @@
                     </div>
                 `;
             } else if (q.type === 'MEDIA') {
-                 optionsHtml = `<div class="question-options text-center"><img src="${escapeHTML(q.media_url || '#')}" class="img-fluid rounded" alt="Question Media" style="max-height: 300px;"></div>`;
-                 // Input needed here still
-                 optionsHtml += `<p class="text-muted mt-2">Please answer based on the media shown.</p>`;
+                optionsHtml = `<div class="question-options text-center"><img src="${escapeHTML(q.media_url || '#')}" class="img-fluid rounded" alt="Question Media" style="max-height: 300px;"></div>`;
+                // Input needed here still
+                optionsHtml += `<p class="text-muted mt-2">Please answer based on the media shown.</p>`;
             } else {
-                 optionsHtml = '<p class="text-muted question-options">Unsupported question type.</p>';
+                optionsHtml = '<p class="text-muted question-options">Unsupported question type.</p>';
             }
 
             // --- Include Media if Present (and not the primary type) ---
@@ -567,48 +638,48 @@
                 <div class="card-body">
                     <h5 class="card-title mb-3">Question ${index + 1}: <span class="question-text">${escapeHTML(q.text)}</span></h5>
                     ${mediaHtml}
-                    ${optionsHtml}
+                    ${optionsHtml} {# <<< Ensure this variable holds the generated HTML #}
                 </div>
             `;
             questionAreaDiv.appendChild(card);
-        });
-    }
+        }); // End forEach question
+    } // End renderQuestions
 
-     /**
-     * Populates the UI form elements with answers loaded from studentAnswers state.
-     */
+    /**
+    * Populates the UI form elements with answers loaded from studentAnswers state.
+    */
     function restoreAnswersUI() {
-         console.log("DEBUG: Restoring answers to UI:", studentAnswers);
-         Object.keys(studentAnswers).forEach(questionId => {
-             const answer = studentAnswers[questionId];
-             const questionCard = questionAreaDiv.querySelector(`.question-card[data-question-id="${questionId}"]`);
-             if (!questionCard) {
-                  console.warn("Could not find card for question ID:", questionId, "while restoring answers.");
-                  return;
-             }
+        console.log("DEBUG: Restoring answers to UI:", studentAnswers);
+        Object.keys(studentAnswers).forEach(questionId => {
+            const answer = studentAnswers[questionId];
+            const questionCard = questionAreaDiv.querySelector(`.question-card[data-question-id="${questionId}"]`);
+            if (!questionCard) {
+                console.warn("Could not find card for question ID:", questionId, "while restoring answers.");
+                return;
+            }
 
-             if (Array.isArray(answer)) { // MCQ answer (list of option IDs)
-                  console.log(`DEBUG: Restoring MCQ for Q ${questionId}, value:`, answer);
-                  answer.forEach(optionId => {
-                       const checkbox = questionCard.querySelector(`input[type="checkbox"][value="${optionId}"]`);
-                       if (checkbox) {
-                            checkbox.checked = true;
-                       } else {
-                            console.warn("Could not find checkbox for option ID:", optionId, "in question", questionId);
-                       }
-                  });
-             } else if (typeof answer === 'string') { // Short Text answer
-                  console.log(`DEBUG: Restoring Short Text for Q ${questionId}, value:`, answer);
-                  const textarea = questionCard.querySelector(`textarea[data-question-id="${questionId}"]`);
-                  if (textarea) {
-                       textarea.value = answer;
-                  } else {
-                       console.warn("Could not find textarea for question ID:", questionId);
-                  }
-             }
-             // Add cases for other answer types later
-         });
-         console.log("DEBUG: Finished restoring answers to UI.");
+            if (Array.isArray(answer)) { // MCQ answer (list of option IDs)
+                console.log(`DEBUG: Restoring MCQ for Q ${questionId}, value:`, answer);
+                answer.forEach(optionId => {
+                    const checkbox = questionCard.querySelector(`input[type="checkbox"][value="${optionId}"]`);
+                    if (checkbox) {
+                        checkbox.checked = true;
+                    } else {
+                        console.warn("Could not find checkbox for option ID:", optionId, "in question", questionId);
+                    }
+                });
+            } else if (typeof answer === 'string') { // Short Text answer
+                console.log(`DEBUG: Restoring Short Text for Q ${questionId}, value:`, answer);
+                const textarea = questionCard.querySelector(`textarea[data-question-id="${questionId}"]`);
+                if (textarea) {
+                    textarea.value = answer;
+                } else {
+                    console.warn("Could not find textarea for question ID:", questionId);
+                }
+            }
+            // Add cases for other answer types later
+        });
+        console.log("DEBUG: Finished restoring answers to UI.");
     }
 
     /**
@@ -627,11 +698,11 @@
      * Shows all question cards (for 'all' presentation mode).
      */
     function showAllQuestions() {
-         console.log("DEBUG: showAllQuestions called.");
-         const cards = questionAreaDiv.querySelectorAll('.question-card');
-         cards.forEach(card => {
+        console.log("DEBUG: showAllQuestions called.");
+        const cards = questionAreaDiv.querySelectorAll('.question-card');
+        cards.forEach(card => {
             card.style.display = 'block';
-         });
+        });
     }
 
     /**
@@ -649,13 +720,13 @@
         const questionOptionsDiv = questionCard ? questionCard.querySelector('.question-options') : null;
 
         if (inputElement.type === 'checkbox' || inputElement.type === 'radio') {
-             if (!questionOptionsDiv) return;
-             const checkedOptions = questionOptionsDiv.querySelectorAll(`input[name="q_${questionId}"]:checked`);
-             answer = Array.from(checkedOptions).map(cb => cb.value);
+            if (!questionOptionsDiv) return;
+            const checkedOptions = questionOptionsDiv.querySelectorAll(`input[name="q_${questionId}"]:checked`);
+            answer = Array.from(checkedOptions).map(cb => cb.value);
         } else if (inputElement.tagName === 'TEXTAREA') {
-             answer = inputElement.value; // Store trimmed? No, store raw input for now.
+            answer = inputElement.value; // Store trimmed? No, store raw input for now.
         } else {
-             return; // Unsupported type
+            return; // Unsupported type
         }
 
         studentAnswers[questionId] = answer;
@@ -670,20 +741,20 @@
      * @param {number} direction - +1 for Next, -1 for Previous.
      */
     function navigate(direction) {
-         console.log("DEBUG: navigate called with direction:", direction);
-         if (submissionInProgress) return; // Prevent navigation while submitting
+        console.log("DEBUG: navigate called with direction:", direction);
+        if (submissionInProgress) return; // Prevent navigation while submitting
 
         const newIndex = currentQuestionIndex + direction;
         const totalQuestions = quizData?.questions?.length || 0;
 
         if (newIndex >= 0 && newIndex < totalQuestions) {
-             currentQuestionIndex = newIndex;
-             showQuestion(currentQuestionIndex);
-             updateProgress();
-             updateNavigationButtons();
-             saveQuizState(); // Save state after navigating index
+            currentQuestionIndex = newIndex;
+            showQuestion(currentQuestionIndex);
+            updateProgress();
+            updateNavigationButtons();
+            saveQuizState(); // Save state after navigating index
         } else {
-             console.warn("DEBUG: Navigation blocked (out of bounds). Index:", newIndex);
+            console.warn("DEBUG: Navigation blocked (out of bounds). Index:", newIndex);
         }
     }
 
@@ -697,7 +768,7 @@
             prevButton.style.display = 'none';
             nextButton.style.display = 'none';
             submitButton.style.display = presentationMode === 'all' ? 'inline-block' : 'none';
-            if(submitButton) submitButton.disabled = submissionInProgress || (quizData.questions.length === 0); // Disable submit if no questions
+            if (submitButton) submitButton.disabled = submissionInProgress || (quizData.questions.length === 0); // Disable submit if no questions
             return;
         }
 
@@ -730,15 +801,15 @@
      * Updates the progress bar and text display.
      */
     function updateProgress() {
-         const totalQuestions = quizData?.questions?.length || 0;
-         // Ensure currentQuestionIndex is valid before calculating percentage
-         const currentValidIndex = Math.min(Math.max(0, currentQuestionIndex), totalQuestions > 0 ? totalQuestions - 1 : 0);
-         const currentQNumber = totalQuestions > 0 ? currentValidIndex + 1 : 0; // 1-based for display
-         const percent = totalQuestions > 0 ? Math.round((currentQNumber / totalQuestions) * 100) : 0;
+        const totalQuestions = quizData?.questions?.length || 0;
+        // Ensure currentQuestionIndex is valid before calculating percentage
+        const currentValidIndex = Math.min(Math.max(0, currentQuestionIndex), totalQuestions > 0 ? totalQuestions - 1 : 0);
+        const currentQNumber = totalQuestions > 0 ? currentValidIndex + 1 : 0; // 1-based for display
+        const percent = totalQuestions > 0 ? Math.round((currentQNumber / totalQuestions) * 100) : 0;
 
-         progressTextSpan.textContent = `Question ${currentQNumber} of ${totalQuestions}`;
-         progressBar.style.width = `${percent}%`;
-         progressBar.setAttribute('aria-valuenow', percent);
+        progressTextSpan.textContent = `Question ${currentQNumber} of ${totalQuestions}`;
+        progressBar.style.width = `${percent}%`;
+        progressBar.setAttribute('aria-valuenow', percent);
     }
 
     /**
@@ -778,17 +849,17 @@
             updateTimerDisplay(timeLeftSeconds);
 
             if (timeLeftSeconds <= 0) {
-                 clearInterval(timerInterval);
-                 timerInterval = null;
-                 quizTimerDiv.textContent = "Time's Up!";
-                 quizTimerDiv.classList.remove('text-danger');
-                 quizTimerDiv.classList.add('text-warning');
-                 console.log("Time expired. Auto-submitting quiz.");
-                 if (!submissionInProgress) submitQuiz(true); // Auto-submit
+                clearInterval(timerInterval);
+                timerInterval = null;
+                quizTimerDiv.textContent = "Time's Up!";
+                quizTimerDiv.classList.remove('text-danger');
+                quizTimerDiv.classList.add('text-warning');
+                console.log("Time expired. Auto-submitting quiz.");
+                if (!submissionInProgress) submitQuiz(true); // Auto-submit
             } else if (timeLeftSeconds < 60) {
-                 quizTimerDiv.classList.add('text-danger');
+                quizTimerDiv.classList.add('text-danger');
             } else {
-                 quizTimerDiv.classList.remove('text-danger');
+                quizTimerDiv.classList.remove('text-danger');
             }
         }, 1000);
     }
@@ -798,9 +869,9 @@
      * @param {number} seconds - Total seconds remaining.
      */
     function updateTimerDisplay(seconds) {
-         const minutes = Math.floor(seconds / 60);
-         const remainingSeconds = seconds % 60;
-         quizTimerDiv.textContent = `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        quizTimerDiv.textContent = `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
     }
 
     /**
@@ -817,11 +888,11 @@
 
         // --- ADD CHECK: Bypass answer check only if time is up ---
         if (!isTimeUp && !checkAllQuestionsAnswered()) {
-          console.warn("DEBUG: Manual submit attempted but not all questions answered.");
-          alert("Please answer all questions before submitting.");
-          return; // Prevent manual submission
-     }
-     // --- END CHECK ---
+            console.warn("DEBUG: Manual submit attempted but not all questions answered.");
+            alert("Please answer all questions before submitting.");
+            return; // Prevent manual submission
+        }
+        // --- END CHECK ---
 
         submissionInProgress = true;
         console.log(">>> DEBUG: Set submissionInProgress = true");
@@ -841,63 +912,63 @@
             end_time: endTimeISO,
             submitted_due_to_timeout: isTimeUp
         };
-         console.log("Submission Payload (to send to API-4):", submissionData);
+        console.log("Submission Payload (to send to API-4):", submissionData);
 
-         const apiUrl = `/api/quizzes/${quizId}/submit/`;
-         const csrfToken = getCookie('csrftoken'); // Get CSRF if needed
+        const apiUrl = `/api/quizzes/${quizId}/submit/`;
+        const csrfToken = getCookie('csrftoken'); // Get CSRF if needed
 
-         try {
-             const response = await fetch(apiUrl, {
-                 method: 'POST',
-                 headers: {
-                     'Content-Type': 'application/json',
-                     // 'X-CSRFToken': csrfToken // Include if backend API requires CSRF for this endpoint
-                 },
-                 body: JSON.stringify(submissionData)
-             });
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'X-CSRFToken': csrfToken // Include if backend API requires CSRF for this endpoint
+                },
+                body: JSON.stringify(submissionData)
+            });
 
-             const data = await response.json();
-             console.log("Submission Response Status:", response.status);
-             console.log("Submission Response Data:", data);
+            const data = await response.json();
+            console.log("Submission Response Status:", response.status);
+            console.log("Submission Response Data:", data);
 
-             if (response.ok) {
-                 // --- Success ---
-                 clearSavedState(); // Clear localStorage
+            if (response.ok) {
+                // --- Success ---
+                clearSavedState(); // Clear localStorage
 
-                 // Store attempt data for results page
-                 try {
-                     sessionStorage.removeItem(`quizData_${quizId}`);
-                     sessionStorage.setItem('quizAttemptData', JSON.stringify(data));
-                     sessionStorage.setItem('lastAttemptId', data.attempt_id);
-                 } catch (e) {
-                      console.error("Session storage error after submission:", e);
-                 }
+                // Store attempt data for results page
+                try {
+                    sessionStorage.removeItem(`quizData_${quizId}`);
+                    sessionStorage.setItem('quizAttemptData', JSON.stringify(data));
+                    sessionStorage.setItem('lastAttemptId', data.attempt_id);
+                } catch (e) {
+                    console.error("Session storage error after submission:", e);
+                }
 
-                 // Redirect to results page (STU-3)
-                 const resultsUrl = `/quiz/results/${data.attempt_id}/`;
-                 console.log("Redirecting to results page:", resultsUrl);
-                 window.location.href = resultsUrl; // Redirect
+                // Redirect to results page (STU-3)
+                const resultsUrl = `/quiz/results/${data.attempt_id}/`;
+                console.log("Redirecting to results page:", resultsUrl);
+                window.location.href = resultsUrl; // Redirect
 
-             } else {
-                 // --- API Error Handling ---
-                 console.error("Submission failed API response:", data);
-                 alert(`Error submitting quiz: ${data.error || 'Please try again.'}`);
-                 setButtonState(false); // Re-enable buttons on API error
-                 submissionInProgress = false; // Reset flag
-                 // Restart auto-save?
-                 console.log(">>> DEBUG: Reset submissionInProgress = false due to API error.");
-                 if (!autoSaveInterval) autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
-             }
+            } else {
+                // --- API Error Handling ---
+                console.error("Submission failed API response:", data);
+                alert(`Error submitting quiz: ${data.error || 'Please try again.'}`);
+                setButtonState(false); // Re-enable buttons on API error
+                submissionInProgress = false; // Reset flag
+                // Restart auto-save?
+                console.log(">>> DEBUG: Reset submissionInProgress = false due to API error.");
+                if (!autoSaveInterval) autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
+            }
 
-         } catch (error) {
-             // --- Network/JS Error Handling ---
-             console.error("Network or other error submitting quiz:", error);
-             alert("Network error submitting quiz. Please check your connection and try again.");
-             setButtonState(false); // Re-enable buttons
-             submissionInProgress = false; // Reset flag
-             console.log(">>> DEBUG: Reset submissionInProgress = false due to catch block error.");
-             if (!autoSaveInterval) autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
-         }
+        } catch (error) {
+            // --- Network/JS Error Handling ---
+            console.error("Network or other error submitting quiz:", error);
+            alert("Network error submitting quiz. Please check your connection and try again.");
+            setButtonState(false); // Re-enable buttons
+            submissionInProgress = false; // Reset flag
+            console.log(">>> DEBUG: Reset submissionInProgress = false due to catch block error.");
+            if (!autoSaveInterval) autoSaveInterval = setInterval(saveQuizState, 30 * 1000);
+        }
     } // End submitQuiz
 
 
@@ -938,9 +1009,9 @@
         } catch (e) {
             console.error("Error saving quiz state to localStorage:", e);
             if (autoSaveInterval) {
-                 clearInterval(autoSaveInterval);
-                 autoSaveInterval = null;
-                 alert("Warning: Could not save quiz progress. Local storage might be full or disabled. Auto-save stopped.");
+                clearInterval(autoSaveInterval);
+                autoSaveInterval = null;
+                alert("Warning: Could not save quiz progress. Local storage might be full or disabled. Auto-save stopped.");
             }
         }
     }
@@ -951,10 +1022,10 @@
      * Basic HTML escaping function.
      */
     function escapeHTML(str) {
-       if (str === null || str === undefined) return '';
-       const div = document.createElement('div');
-       div.textContent = str;
-       return div.innerHTML;
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     /**
@@ -963,30 +1034,30 @@
      * @param {boolean} isLoading - True to disable buttons/show spinner, false otherwise.
      */
     // --- REVISED setButtonState ---
-function setButtonState(isLoading) {
-    // Update main loading flag
-    submissionInProgress = isLoading; // Assume call to setButtonState implies loading state change
+    function setButtonState(isLoading) {
+        // Update main loading flag
+        submissionInProgress = isLoading; // Assume call to setButtonState implies loading state change
 
-    // Always disable Prev/Next during submit process
-    if (prevButton) prevButton.disabled = isLoading;
-    if (nextButton) nextButton.disabled = isLoading;
+        // Always disable Prev/Next during submit process
+        if (prevButton) prevButton.disabled = isLoading;
+        if (nextButton) nextButton.disabled = isLoading;
 
-    // Handle Submit button state
-    if (submitButton) {
-         // Check answered status *unless* we are currently loading (submitting)
-         const allowSubmit = isLoading ? false : checkAllQuestionsAnswered();
-         submitButton.disabled = !allowSubmit;
-         console.log(`DEBUG: setButtonState(${isLoading}) -> Submit button disabled: ${submitButton.disabled}`);
+        // Handle Submit button state
+        if (submitButton) {
+            // Check answered status *unless* we are currently loading (submitting)
+            const allowSubmit = isLoading ? false : checkAllQuestionsAnswered();
+            submitButton.disabled = !allowSubmit;
+            console.log(`DEBUG: setButtonState(${isLoading}) -> Submit button disabled: ${submitButton.disabled}`);
 
-         if(submitSpinner){
-            if(isLoading) {
-                submitSpinner.classList.remove('d-none');
-            } else {
-                submitSpinner.classList.add('d-none');
+            if (submitSpinner) {
+                if (isLoading) {
+                    submitSpinner.classList.remove('d-none');
+                } else {
+                    submitSpinner.classList.add('d-none');
+                }
             }
-         }
+        }
     }
-}
 
     /**
      * Helper function to get CSRF token from cookies (if needed).
@@ -1017,15 +1088,15 @@ function setButtonState(isLoading) {
     /**
      * Clears the saved quiz state from localStorage.
      */
-     function clearSavedState() {
-         try {
-             const key = getLocalStorageKey();
-             localStorage.removeItem(key);
-             console.log("DEBUG: Cleared saved quiz state from localStorage. Key:", key);
-         } catch (e) {
-             console.error("Error clearing saved quiz state:", e);
-         }
-     }
+    function clearSavedState() {
+        try {
+            const key = getLocalStorageKey();
+            localStorage.removeItem(key);
+            console.log("DEBUG: Cleared saved quiz state from localStorage. Key:", key);
+        } catch (e) {
+            console.error("Error clearing saved quiz state:", e);
+        }
+    }
 
     /**
      * Tries to estimate the original start time based on saved state.
@@ -1047,56 +1118,56 @@ function setButtonState(isLoading) {
             const safeElapsedSeconds = Math.max(0, elapsedSeconds);
             return savedState.lastSaved - (safeElapsedSeconds * 1000);
         } catch (e) {
-             console.error("Error determining original start time:", e);
-             return Date.now(); // Fallback
+            console.error("Error determining original start time:", e);
+            return Date.now(); // Fallback
         }
     }
 
-     /**
-      * Shows an error message in the designated error div.
-      * @param {string} message - The error message to display.
-      */
-     function showError(message) {
-         if (quizErrorDiv) { // Check if element exists
-             quizErrorDiv.textContent = message;
-             quizErrorDiv.classList.remove('d-none');
-         } else {
-              console.error("Error display element not found. Message:", message);
-         }
-     }
+    /**
+     * Shows an error message in the designated error div.
+     * @param {string} message - The error message to display.
+     */
+    function showError(message) {
+        if (quizErrorDiv) { // Check if element exists
+            quizErrorDiv.textContent = message;
+            quizErrorDiv.classList.remove('d-none');
+        } else {
+            console.error("Error display element not found. Message:", message);
+        }
+    }
 
-     /**
-      * Clears any currently displayed error messages.
-      */
-     function clearMessages() { // Renamed from clearError for potentially adding success msgs later
-          if (quizErrorDiv) {
-              quizErrorDiv.classList.add('d-none');
-              quizErrorDiv.textContent = '';
-          }
-          // Add similar logic for success messages if you have a success message div
-     }
+    /**
+     * Clears any currently displayed error messages.
+     */
+    function clearMessages() { // Renamed from clearError for potentially adding success msgs later
+        if (quizErrorDiv) {
+            quizErrorDiv.classList.add('d-none');
+            quizErrorDiv.textContent = '';
+        }
+        // Add similar logic for success messages if you have a success message div
+    }
 
-     /**
-      * Shows/hides the main quiz container div.
-      * @param {boolean} show - True to show, false to hide.
-      */
-     function showFormContent(show) { // Renamed for consistency if used elsewhere
-          if (quizContainerDiv) {
-             if (show) { quizContainerDiv.classList.remove('d-none'); }
-             else { quizContainerDiv.classList.add('d-none'); }
-          }
-     }
+    /**
+     * Shows/hides the main quiz container div.
+     * @param {boolean} show - True to show, false to hide.
+     */
+    function showFormContent(show) { // Renamed for consistency if used elsewhere
+        if (quizContainerDiv) {
+            if (show) { quizContainerDiv.classList.remove('d-none'); }
+            else { quizContainerDiv.classList.add('d-none'); }
+        }
+    }
 
-     /**
-      * Shows/hides the main loading spinner.
-      * @param {boolean} show - True to show, false to hide.
-      */
-     function showLoadingSpinner(show) {
-          if (quizLoadingDiv) {
-              if (show) { quizLoadingDiv.classList.remove('d-none'); }
-              else { quizLoadingDiv.classList.add('d-none'); }
-          }
-     }
+    /**
+     * Shows/hides the main loading spinner.
+     * @param {boolean} show - True to show, false to hide.
+     */
+    function showLoadingSpinner(show) {
+        if (quizLoadingDiv) {
+            if (show) { quizLoadingDiv.classList.remove('d-none'); }
+            else { quizLoadingDiv.classList.add('d-none'); }
+        }
+    }
 
 
     /**
@@ -1107,7 +1178,7 @@ function setButtonState(isLoading) {
      * - Other types: Currently assumed answered if any entry exists.
      * @returns {boolean} True if all questions have a valid answer, false otherwise.
      */
-     function checkAllQuestionsAnswered() {
+    function checkAllQuestionsAnswered() {
         // Ensure necessary data structures are available
         if (!quizData || !quizData.questions || !Array.isArray(quizData.questions) || quizData.questions.length === 0) {
             console.log("DEBUG CheckAnswered: Quiz data or questions array is missing or empty.");
@@ -1161,9 +1232,9 @@ function setButtonState(isLoading) {
                         break;
                 }
             } else {
-                 // Log if no entry was found for this question ID
-                 // console.log(`DEBUG CheckAnswered: No answer entry found for Q [${questionId}]`);
-                 isConsideredAnswered = false;
+                // Log if no entry was found for this question ID
+                // console.log(`DEBUG CheckAnswered: No answer entry found for Q [${questionId}]`);
+                isConsideredAnswered = false;
             }
 
             // If the question is considered answered according to its type's logic, increment count
@@ -1180,12 +1251,12 @@ function setButtonState(isLoading) {
 
 
     function updateSubmitButtonState() {
-    if (!submitButton) return; // Safety check
+        if (!submitButton) return; // Safety check
 
-    allQuestionsAnswered = checkAllQuestionsAnswered(); // Update global flag
-    // Enable submit only if NOT currently submitting AND all questions have an answer entry
-    submitButton.disabled = submissionInProgress || !allQuestionsAnswered;
-    console.log(`DEBUG: Submit button disabled: ${submitButton.disabled} (submissionInProgress: ${submissionInProgress}, allAnswered: ${allQuestionsAnswered})`);
+        allQuestionsAnswered = checkAllQuestionsAnswered(); // Update global flag
+        // Enable submit only if NOT currently submitting AND all questions have an answer entry
+        submitButton.disabled = submissionInProgress || !allQuestionsAnswered;
+        console.log(`DEBUG: Submit button disabled: ${submitButton.disabled} (submissionInProgress: ${submissionInProgress}, allAnswered: ${allQuestionsAnswered})`);
     }
 
 

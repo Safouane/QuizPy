@@ -351,34 +351,56 @@ def question_list_create_api(request):
                 'difficulty': request_data.get('difficulty', 'Medium'),
                 'category': request_data.get('category', 'Uncategorized'),
                 'media_url': request_data.get('media_url'),
-                # --- ADDED FOR SHORT TEXT ---
+                # --- FOR SHORT TEXT ---
                 'short_answer_review_mode': 'manual', # Default mode
-                'short_answer_correct_text': None
-                # --- END ADD ---
+                'short_answer_correct_text': None,
+                'mcq_is_single_choice': False # <<< Default to False (multiple choice)
             }
 
             # --- Handle MCQ Specific Fields ---
             if q_type == 'MCQ':
+                is_single_choice = bool(request_data.get('mcq_is_single_choice', False)) # <<< Get flag from payload
+                new_question['mcq_is_single_choice'] = is_single_choice # Store the flag
+
                 options_data = request_data.get('options', [])
-                correct_answer_texts = request_data.get('correct_answer_texts', []) # Expect list of correct option TEXTS from frontend for simplicity
+                correct_answer_texts = request_data.get('correct_answer_texts', [])
 
                 if not options_data or not correct_answer_texts:
-                     return JsonResponse({'error': 'MCQ questions require options and correct_answer_texts.'}, status=400)
-                
+                    return JsonResponse({'error': 'MCQ questions require options and correct_answer_texts.'}, status=400)
+
+                # --- Validation based on single/multiple choice ---
+                if is_single_choice and len(correct_answer_texts) != 1:
+                    return JsonResponse({'error': 'Single-choice MCQs must have exactly one correct answer selected.'}, status=400)
+                if not is_single_choice and len(correct_answer_texts) == 0:
+                    # For multiple choice, still need at least one correct answer
+                    return JsonResponse({'error': 'Multiple-choice MCQs must have at least one correct answer selected.'}, status=400)
+                # --- End Validation ---
+
+
+                # Generate options and map correct answers (logic remains similar)
                 generated_options = []
                 correct_option_ids = []
+                unique_correct_texts = set(correct_answer_texts) # Use set for efficient lookup
+
                 for opt_text in options_data:
-                     option_id = str(uuid.uuid4())
-                     generated_options.append({"id": option_id, "text": opt_text})
-                     if opt_text in correct_answer_texts:
-                          correct_option_ids.append(option_id)
-                
-                if not correct_option_ids:
-                     return JsonResponse({'error': 'Correct answer text(s) did not match any provided options.'}, status=400)
+                    option_id = str(uuid.uuid4())
+                    generated_options.append({"id": option_id, "text": opt_text})
+                    if opt_text in unique_correct_texts:
+                        correct_option_ids.append(option_id)
+
+                # Re-check if correct answers found match the texts provided
+                if len(correct_option_ids) != len(unique_correct_texts):
+                    return JsonResponse({'error': 'One or more correct answer texts did not match any provided options.'}, status=400)
+                # Re-check single choice constraint based on FOUND IDs
+                if is_single_choice and len(correct_option_ids) != 1:
+                    print(f"ERROR: Correct texts {correct_answer_texts} resulted in {len(correct_option_ids)} correct option IDs for single choice.")
+                    return JsonResponse({'error': 'Internal error: Could not map exactly one correct answer for single-choice MCQ.'}, status=500)
+
 
                 new_question['options'] = generated_options
                 new_question['correct_answer'] = correct_option_ids
-
+                
+                                
             # --- Handle other types (e.g., SHORT_TEXT) - add validation/fields as needed ---
             elif q_type == 'SHORT_TEXT':
                 review_mode = request_data.get('short_answer_review_mode', 'manual')
@@ -456,15 +478,76 @@ def question_detail_api(request, question_id):
             request_data = json.loads(request.body)
             original_quiz_ids = set(question.get('quiz_ids', []))
 
-            # Update fields (only update fields present in request_data)
+            # Store original type for comparison later
+            original_type = question.get('type')
+            new_type = request_data.get('type', original_type)  # Get new type if provided
+
+            # Update common fields (only update fields present in request_data)
             # Use .get() for safety if a field might be missing from the original JSON
             if 'text' in request_data: question['text'] = request_data['text']
-            if 'type' in request_data: question['type'] = request_data['type'] # Note: Changing type might invalidate options/answers
+            if 'type' in request_data: question['type'] = request_data['type']  # Note: Changing type might invalidate options/answers
             if 'score' in request_data: question['score'] = request_data['score']
             if 'difficulty' in request_data: question['difficulty'] = request_data['difficulty']
             if 'category' in request_data: question['category'] = request_data['category']
-            if 'media_url' in request_data: question['media_url'] = request_data.get('media_url') # Allow setting to null
-            if 'quiz_ids' in request_data: question['quiz_ids'] = request_data['quiz_ids'] # Overwrite associated quizzes
+            if 'media_url' in request_data: question['media_url'] = request_data.get('media_url')  # Allow setting to null
+            if 'quiz_ids' in request_data: question['quiz_ids'] = request_data['quiz_ids']  # Overwrite associated quizzes
+
+            # Store the single choice flag (even if type isn't MCQ yet, allows changing type + flag in one go)
+            if 'mcq_is_single_choice' in request_data:
+                question['mcq_is_single_choice'] = bool(request_data['mcq_is_single_choice'])
+
+            is_single_choice = question.get('mcq_is_single_choice', False)  # Get current/new flag
+
+            # Update MCQ specific fields carefully
+            if new_type == 'MCQ':
+                question['type'] = 'MCQ'  # Ensure type is set if options are provided
+
+                # If options are being updated OR type changed to MCQ OR single choice flag changed
+                if 'options' in request_data or 'correct_answer_texts' in request_data or new_type != original_type or 'mcq_is_single_choice' in request_data:
+                    options_data = request_data.get('options')
+                    correct_answer_texts = request_data.get('correct_answer_texts')
+
+                    # If options/correct answers aren't provided during type change or flag change, try using existing ones
+                    if options_data is None: options_data = [opt.get('text') for opt in question.get('options', [])]
+                    if correct_answer_texts is None:
+                        # Try to get texts from existing correct_answer IDs and existing options
+                        existing_options_map = {opt.get('id'): opt.get('text') for opt in question.get('options', [])}
+                        correct_answer_texts = [existing_options_map.get(cid) for cid in question.get('correct_answer', []) if existing_options_map.get(cid) is not None]
+
+                    if not options_data or not correct_answer_texts:
+                        return JsonResponse({'error': 'Updating MCQ requires options and correct_answer_texts.'}, status=400)
+
+                    # --- Perform Validation based on potentially new is_single_choice flag ---
+                    if is_single_choice and len(correct_answer_texts) != 1:
+                        return JsonResponse({'error': 'Single-choice MCQs must have exactly one correct answer selected.'}, status=400)
+                    if not is_single_choice and len(correct_answer_texts) == 0:
+                        return JsonResponse({'error': 'Multiple-choice MCQs must have at least one correct answer selected.'}, status=400)
+                    # --- End Validation ---
+
+                    # Regenerate options and map correct answers
+                    generated_options = []
+                    correct_option_ids = []
+                    unique_correct_texts = set(correct_answer_texts)
+
+                    for opt_text in options_data:
+                        option_id = str(uuid.uuid4())  # Always generate new option IDs on update for safety
+                        generated_options.append({"id": option_id, "text": opt_text})
+                        if opt_text in unique_correct_texts:
+                            correct_option_ids.append(option_id)
+
+                    # Re-check match and single choice constraint
+                    if len(correct_option_ids) != len(unique_correct_texts):
+                        return JsonResponse({'error': 'One or more correct answer texts did not match any provided options during update.'}, status=400)
+                    if is_single_choice and len(correct_option_ids) != 1:
+                        return JsonResponse({'error': 'Could not map exactly one correct answer for single-choice MCQ during update.'}, status=400)
+
+                    question['options'] = generated_options
+                    question['correct_answer'] = correct_option_ids
+            elif original_type == 'MCQ' and new_type != 'MCQ':
+                # If changing type *away* from MCQ, clear MCQ fields
+                question['options'] = []
+                question['correct_answer'] = []
+                question['mcq_is_single_choice'] = False  # Reset flag
 
             # --- Update Short Text Specific Fields ---
             if question.get('type') == 'SHORT_TEXT':
@@ -485,28 +568,12 @@ def question_detail_api(request, question_id):
                             return JsonResponse({'error': 'Correct answer text cannot be empty for automatic review mode.'}, status=400)
                         question['short_answer_correct_text'] = correct_text
                     # else: ignore correct_text if mode is manual
-
-            # Update MCQ specific fields carefully
-            elif question['type'] == 'MCQ':
-                if 'options' in request_data: # Expect list of texts
-                     options_data = request_data.get('options', [])
-                     correct_answer_texts = request_data.get('correct_answer_texts', []) # Expect correct texts again
-                     if not options_data or not correct_answer_texts:
-                          return JsonResponse({'error': 'Updating MCQ requires options and correct_answer_texts.'}, status=400)
-
-                     generated_options = []
-                     correct_option_ids = []
-                     for opt_text in options_data:
-                          option_id = str(uuid.uuid4()) # Generate new IDs on update for simplicity
-                          generated_options.append({"id": option_id, "text": opt_text})
-                          if opt_text in correct_answer_texts:
-                               correct_option_ids.append(option_id)
-
-                     if not correct_option_ids:
-                          return JsonResponse({'error': 'Correct answer text(s) did not match any provided options during update.'}, status=400)
-                     question['options'] = generated_options
-                     question['correct_answer'] = correct_option_ids
-                # Allow updating only correct answers if options are not provided? Maybe too complex for now.
+            elif original_type == 'SHORT_TEXT' and new_type != 'SHORT_TEXT':
+                # If changing type away from SHORT_TEXT, clear SHORT_TEXT fields
+                if 'short_answer_review_mode' in question:
+                    del question['short_answer_review_mode']
+                if 'short_answer_correct_text' in question:
+                    del question['short_answer_correct_text']
 
             # Replace the old question dict with the updated one
             questions[question_index] = question
@@ -523,21 +590,21 @@ def question_detail_api(request, question_id):
 
             for quiz in all_quizzes:
                 quiz_questions = quiz.setdefault('questions', [])
-                q_id_str = str(question_id) # Ensure comparison is consistent
+                q_id_str = str(question_id)  # Ensure comparison is consistent
                 # Remove question from quizzes it's no longer linked to
                 if quiz.get('id') in removed_quiz_ids:
-                     if q_id_str in quiz_questions:
-                          quiz_questions.remove(q_id_str)
-                          quizzes_updated = True
+                    if q_id_str in quiz_questions:
+                        quiz_questions.remove(q_id_str)
+                        quizzes_updated = True
                 # Add question to quizzes it's newly linked to
                 if quiz.get('id') in added_quiz_ids:
-                     if q_id_str not in quiz_questions:
-                          quiz_questions.append(q_id_str)
-                          quizzes_updated = True
+                    if q_id_str not in quiz_questions:
+                        quiz_questions.append(q_id_str)
+                        quizzes_updated = True
 
             if quizzes_updated:
                 data['quizzes'] = all_quizzes
-                save_data(data) # Save again with updated quiz links
+                save_data(data)  # Save again with updated quiz links
 
             return JsonResponse({'message': 'Question updated successfully.', 'question': question})
 
@@ -548,6 +615,7 @@ def question_detail_api(request, question_id):
             import traceback
             traceback.print_exc()
             return JsonResponse({'error': f'An unexpected error occurred: {str(e)}'}, status=500)
+
 
     # --- DELETE Request ---
     elif request.method == 'DELETE':
@@ -876,6 +944,7 @@ def quiz_access_api(request):
                  'type': q.get('type'),
                  'score': q.get('score', 1), # Send score for potential display? Optional.
                  'media_url': q.get('media_url'), # Send media URL if present
+                 'mcq_is_single_choice': q.get('mcq_is_single_choice', False), # <<< Pass the flag!
                  'options': [] # Prepare options below (only for MCQ)
              }
              # Send only option ID and Text, DO NOT SEND correct_answer IDs
@@ -981,11 +1050,21 @@ def quiz_submit_api(request, quiz_id):
             if student_answer is not None: # Only grade if student provided an answer
                 if question_type == 'MCQ':
                      correct_option_ids = set(question_data.get('correct_answer', []))
-                     # Student answer for MCQ should be a list of selected option IDs
+                     is_single_choice_q = question_data.get('mcq_is_single_choice', False) # <<< Get flag
+
                      if isinstance(student_answer, list):
                           selected_option_ids = set(student_answer)
-                          # Exact match required for correctness (all correct selected, no incorrect selected)
-                          is_correct = (selected_option_ids == correct_option_ids)
+
+                          # --- Modified Correctness Check ---
+                          if is_single_choice_q:
+                               # Single choice: correct if exactly one selected AND it's the correct one
+                               is_correct = len(selected_option_ids) == 1 and selected_option_ids.issubset(correct_option_ids)
+                               # We assume correct_option_ids also has only 1 item if is_single_choice_q is true due to validation
+                          else:
+                               # Multiple choice: exact match required
+                               is_correct = (selected_option_ids == correct_option_ids)
+                          # --- End Modified Check ---
+
                           if is_correct:
                                score_awarded = question_score
                      else:
