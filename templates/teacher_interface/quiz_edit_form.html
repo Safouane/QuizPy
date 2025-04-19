@@ -204,7 +204,7 @@
                         </select>
                     </div>
                     <div class="col-sm-3">
-                        <button id="modalFilterBtn" class="btn btn-sm btn-outline-secondary w-100">Filter</button>
+                        <button id="modalFilterBtn" class="btn btn-sm btn-outline-secondary w-100" type="button">Filter</button>
                     </div>
                 </div>
 
@@ -858,7 +858,11 @@
 
             // Modal related listeners
             if (modalFilterBtn) {
-                modalFilterBtn.addEventListener('click', loadQuestionBank);
+                modalFilterBtn.addEventListener('click', function (event) { // Add event arg
+                    event.preventDefault(); // <<< ADD THIS LINE
+                    console.log("DEBUG: Modal Filter button clicked.");
+                    loadQuestionBank(); // Call the function to fetch/filter questions
+                });
                 console.log("DEBUG: Attached click listener to modalFilterBtn.");
             } else {
                 console.error("ERROR: modalFilterBtn element not found!");
