@@ -1003,8 +1003,15 @@ def quiz_submit_api(request, quiz_id):
                 return JsonResponse({'error': 'Missing or invalid student information (Name is required).'}, status=400)
         # --- End Student Info Validation ---
 
-        if not student_answers or not isinstance(student_answers, dict):
-                return JsonResponse({'error': 'Missing or invalid answers data.'}, status=400)
+        # --- MODIFIED Answers Validation ---
+        # Require 'answers' key to exist and be a dictionary, but allow it to be empty.
+        # The grading loop will handle missing entries for individual questions.
+        if student_answers is None or not isinstance(student_answers, dict):
+             print(f"ERROR [Submit API]: Missing or invalid 'answers' field in payload. Type: {type(student_answers)}")
+             return JsonResponse({'error': 'Missing or invalid answers data format.'}, status=400)
+
+        # if not student_answers or not isinstance(student_answers, dict):
+        #         return JsonResponse({'error': 'Missing or invalid answers data.'}, status=400)
         
         
         
