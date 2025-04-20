@@ -555,8 +555,15 @@
             return;
         }
 
+        // Define the base URL prefix for media files (must match urls.py static())
+        const mediaUrlPrefix = "/media_files/"; // Make sure this matches your MEDIA_URL_ROOT in views/url
+
         quizData.questions.forEach((q, index) => {
             const card = document.createElement('div');
+            card.classList.add('card', 'shadow-sm', 'question-card');
+            card.dataset.questionId = q.id;
+            card.dataset.index = index;
+            card.style.display = 'none'; // Hide all initially
             card.classList.add('card', 'shadow-sm', 'question-card');
             card.dataset.questionId = q.id;
             card.dataset.index = index; // Store index
@@ -564,47 +571,77 @@
             card.style.display = 'none';
 
             let optionsHtml = '';
+            let questionTextHtml = escapeHTML(q.text || ''); // Default text
+            // --- Render based on Question Type ---
             // --- Render based on Question Type ---
             if (q.type === 'MCQ') {
-                optionsHtml = '<div class="list-group list-group-flush question-options">';
-                // --- CRITICAL CHECK: Access the flag correctly ---
-                // Ensure 'q' object actually HAS 'mcq_is_single_choice' from API-3 response data
-                const isSingleChoice = q.mcq_is_single_choice === true; // Explicit check for boolean true
+                const isSingleChoice = q.mcq_is_single_choice || false;
                 const inputType = isSingleChoice ? 'radio' : 'checkbox';
-                // Radio buttons need a common name PER QUESTION to work as a group
-                const inputName = `q_${q.id}`; // Common name works for radios too
+                const inputName = `q_${q.id}`; // Common name for radios/checkbox group
 
-                console.log(`DEBUG: Rendering MCQ Q${index + 1} (ID: ${q.id}). isSingleChoice: ${isSingleChoice}, inputType: ${inputType}`); // <<< ADD LOG
+                // Use flexbox for image options layout
+                optionsHtml = `<div class="question-options d-flex flex-wrap justify-content-start align-items-stretch">`; // Flex container
 
                 (q.options || []).forEach(opt => {
-                    if (!opt || typeof opt !== 'object') { // Safety check for option data
-                        console.warn("DEBUG: Skipping invalid option data:", opt);
-                        return; // Skip this option
-                    }
-                    const inputId = `q_${q.id}_opt_${opt.id}`; // Unique ID for label 'for'
-
-                    // Ensure option id and text exist
+                    if (!opt || typeof opt !== 'object') return; // Skip invalid
                     const optionId = opt.id;
                     const optionText = opt.text;
-                    if (optionId === undefined || optionText === undefined) {
-                        console.warn("DEBUG: Skipping option with missing id or text:", opt);
-                        return; // Skip this option
+                    const optionMediaFilename = opt.media_filename;
+                    if (!optionId || (!optionText && !optionMediaFilename)) return; // Skip if no ID or content
+
+                    const inputId = `q_${q.id}_opt_${opt.id}`;
+                    const hasImage = !!optionMediaFilename; // Check if image exists
+                    const hasText = !!optionText;
+
+                    // Style for image options
+                    const optionClass = hasImage ? 'mcq-option-image-item' : 'list-group-item'; // Different structure for images
+                    const flexBasis = hasImage ? 'flex-basis: 150px;' : ''; // Control image option size
+                    const optionStyle = `margin: 5px; ${flexBasis}`;
+
+                    // Build content for the option (Image + Text or just Text)
+                    let optionContent = '';
+                    if (hasImage) {
+                        optionContent += `<img src="${mediaUrlPrefix}${escapeHTML(optionMediaFilename)}" alt="${escapeHTML(optionText || 'Option Image')}" class="img-thumbnail mb-1 mcq-option-image" style="max-height: 100px; width: 100%; object-fit: contain;">`;
+                    }
+                    if (hasText) {
+                        // Add text below image or as main content if no image
+                        optionContent += `<div class="option-text ${hasImage ? 'text-center small mt-1' : ''}">${escapeHTML(optionText)}</div>`;
                     }
 
-                    optionsHtml += `
-                        <label class="list-group-item" for="${inputId}">
+                    // Assemble the option label/container
+                    if (hasImage) {
+                        // Use a div container for better image layout control + input
+                        optionsHtml += `
+                        <div class="${optionClass}" style="${optionStyle}">
+                            <label for="${inputId}" class="d-block text-center p-2 border rounded h-100" style="cursor: pointer;">
+                                ${optionContent}
+                                <input class="form-check-input mcq-option visually-hidden" {# Hide input, rely on label click #}
+                                       type="${inputType}"
+                                       name="${inputName}"
+                                       value="${escapeHTML(String(optionId))}"
+                                       id="${inputId}"
+                                       data-question-id="${q.id}"
+                                       onchange="saveAnswer(this); styleSelectedOption(this);">
+                            </label>
+                        </div>
+                    `;
+                    } else {
+                        // Standard list group item for text-only options
+                        optionsHtml += `
+                        <label class="list-group-item" for="${inputId}" style="flex-basis: 100%;"> {# Full width for text #}
                             <input class="form-check-input me-2 mcq-option"
-                                   type="${inputType}"    {# <<< Use the determined inputType variable #}
-                                   name="${inputName}"     {# <<< Use the common name #}
-                                   value="${escapeHTML(String(optionId))}" {# <<< Ensure value is string #}
+                                   type="${inputType}"
+                                   name="${inputName}"
+                                   value="${escapeHTML(String(optionId))}"
                                    id="${inputId}"
                                    data-question-id="${q.id}"
-                                   onchange="saveAnswer(this)">
-                            ${escapeHTML(String(optionText))} {# <<< Ensure text is string #}
+                                   onchange="saveAnswer(this);">
+                            ${optionContent}
                         </label>
                     `;
+                    }
                 });
-                optionsHtml += '</div>';
+                optionsHtml += '</div>'; // End flex container
 
             } else if (q.type === 'SHORT_TEXT') {
                 const inputId = `q_${q.id}_ans`;
@@ -620,64 +657,84 @@
                     </div>
                 `;
             } else if (q.type === 'MEDIA') {
-                optionsHtml = `<div class="question-options text-center"><img src="${escapeHTML(q.media_url || '#')}" class="img-fluid rounded" alt="Question Media" style="max-height: 300px;"></div>`;
-                // Input needed here still
-                optionsHtml += `<p class="text-muted mt-2">Please answer based on the media shown.</p>`;
+                // If type is MEDIA, the main media will be shown below.
+                // Maybe the question text becomes optional?
+                optionsHtml = `<div class="question-options"><p class="text-muted mt-2">Please answer based on the media shown.</p></div>`;
+                // Input mechanism still needed - assumes paired with another input type implicitly? Needs design decision.
+                questionTextHtml = escapeHTML(q.text || ''); // Show text if provided, otherwise empty
+
             } else {
                 optionsHtml = '<p class="text-muted question-options">Unsupported question type.</p>';
             }
 
-            // --- Include Media if Present (and not the primary type) ---
-            let mediaHtml = '';
-            if (q.type !== 'MEDIA' && q.media_url) {
-                mediaHtml = `<div class="question-media mb-3 text-center"><img src="${escapeHTML(q.media_url)}" class="img-fluid rounded" alt="Supporting Media" style="max-height: 200px;"></div>`;
+            // --- Include Main Question Media if Present ---
+            let questionMediaHtml = '';
+            if (q.media_filename) {
+                questionMediaHtml = `<div class="question-media mb-3 text-center"><img src="${mediaUrlPrefix}${escapeHTML(q.media_filename)}" class="img-fluid rounded" alt="Question Media" style="max-height: 250px;"></div>`;
             }
 
             // --- Assemble Card ---
             card.innerHTML = `
-                <div class="card-body">
-                    <h5 class="card-title mb-3">Question ${index + 1}: <span class="question-text">${escapeHTML(q.text)}</span></h5>
-                    ${mediaHtml}
-                    ${optionsHtml} {# <<< Ensure this variable holds the generated HTML #}
-                </div>
-            `;
+            <div class="card-body">
+                <h5 class="card-title mb-3">Question ${index + 1}: <span class="question-text">${questionTextHtml}</span></h5>
+                ${questionMediaHtml} {# Display main question media #}
+                ${optionsHtml} {# Display options / input area #}
+            </div>
+        `;
             questionAreaDiv.appendChild(card);
         }); // End forEach question
+
+        // Add listener for styling selected image options
+        questionAreaDiv.addEventListener('change', handleMcqSelectionStyle);
+
     } // End renderQuestions
 
+    function handleMcqSelectionStyle(event) {
+        if (!event.target.classList.contains('mcq-option')) return;
+
+        const questionCard = event.target.closest('.question-card');
+        if (!questionCard) return;
+        const options = questionCard.querySelectorAll('.mcq-option-image-item label'); // Target labels in image items
+        const targetInput = event.target;
+
+        options.forEach(label => {
+            const input = label.querySelector('input');
+            if (input) {
+                if (input.checked) {
+                    label.classList.add('border-primary', 'border-3', 'bg-light'); // Highlight selected
+                } else {
+                    label.classList.remove('border-primary', 'border-3', 'bg-light');
+                }
+            }
+        });
+    }
+
     /**
-    * Populates the UI form elements with answers loaded from studentAnswers state.
-    */
+     * NEW (or ensure exists): Style selected options on initial load/resume.
+     */
     function restoreAnswersUI() {
         console.log("DEBUG: Restoring answers to UI:", studentAnswers);
         Object.keys(studentAnswers).forEach(questionId => {
             const answer = studentAnswers[questionId];
             const questionCard = questionAreaDiv.querySelector(`.question-card[data-question-id="${questionId}"]`);
-            if (!questionCard) {
-                console.warn("Could not find card for question ID:", questionId, "while restoring answers.");
-                return;
-            }
+            if (!questionCard) return;
 
-            if (Array.isArray(answer)) { // MCQ answer (list of option IDs)
-                console.log(`DEBUG: Restoring MCQ for Q ${questionId}, value:`, answer);
+            if (Array.isArray(answer)) { // MCQ answer
                 answer.forEach(optionId => {
-                    const checkbox = questionCard.querySelector(`input[type="checkbox"][value="${optionId}"]`);
-                    if (checkbox) {
-                        checkbox.checked = true;
-                    } else {
-                        console.warn("Could not find checkbox for option ID:", optionId, "in question", questionId);
+                    const input = questionCard.querySelector(`input.mcq-option[value="${optionId}"]`);
+                    if (input) {
+                        input.checked = true;
+                        // Trigger style update for image options
+                        const label = input.closest('label');
+                        if (label && label.parentElement.classList.contains('mcq-option-image-item')) {
+                            label.classList.add('border-primary', 'border-3', 'bg-light');
+                        }
                     }
                 });
-            } else if (typeof answer === 'string') { // Short Text answer
-                console.log(`DEBUG: Restoring Short Text for Q ${questionId}, value:`, answer);
+            } else if (typeof answer === 'string') { // Short Text
                 const textarea = questionCard.querySelector(`textarea[data-question-id="${questionId}"]`);
-                if (textarea) {
-                    textarea.value = answer;
-                } else {
-                    console.warn("Could not find textarea for question ID:", questionId);
-                }
+                if (textarea) textarea.value = answer;
             }
-            // Add cases for other answer types later
         });
         console.log("DEBUG: Finished restoring answers to UI.");
     }
