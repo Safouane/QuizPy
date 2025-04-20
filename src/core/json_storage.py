@@ -1,166 +1,157 @@
 # src/core/json_storage.py
-
 import json
 import os
-import logging # For logging errors
-import uuid # For generating unique IDs later if needed
+import sys
+from pathlib import Path
+import copy  # Often useful for returning copies
 
-# Configure basic logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Define the default path relative to the project root (QuizPy)
-# Assumes the functions might be called from various places, so absolute path is safer.
-# Get the project root directory (assuming this file is src/core/json_storage.py)
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-DEFAULT_DATA_PATH = os.path.join(PROJECT_ROOT, 'data', 'quiz_data.json')
-
-def load_data(file_path: str = DEFAULT_DATA_PATH) -> dict:
+# --- Define function to determine data file path ---
+def get_data_file_path() -> Path:
     """
-    Loads quiz and question data from a JSON file.
-
-    Args:
-        file_path (str): The path to the JSON data file.
-                         Defaults to 'data/quiz_data.json' in the project root.
-
-    Returns:
-        dict: A dictionary containing 'quizzes' and 'questions' lists.
-              Returns an empty structure ({'quizzes': [], 'questions': []})
-              if the file is not found or contains invalid JSON.
+    Gets the correct path to quiz_data.json whether running from source or packaged.
+    Handles potential execution contexts (script, frozen executable).
+    Returns a Path object.
     """
-    empty_data = {'quizzes': [], 'questions': []}
-    try:
-        # Ensure the directory exists before trying to read (less critical for read, but good practice)
-        # data_dir = os.path.dirname(file_path)
-        # if not os.path.exists(data_dir):
-        #     logging.warning(f"Data directory not found: {data_dir}")
-        #     return empty_data # Or maybe create it? For read, returning empty is safer.
-
-        if not os.path.exists(file_path):
-             logging.warning(f"Data file not found at {file_path}. Returning empty structure.")
-             # Optionally create an empty file here if desired for first run:
-             # save_quiz_data(empty_data, file_path)
-             return empty_data
-
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-            # Basic validation: Ensure top-level keys exist
-            if 'quizzes' not in data or 'questions' not in data:
-                 logging.warning(f"Invalid structure in {file_path}. Missing 'quizzes' or 'questions' key. Returning empty structure.")
-                 return empty_data
-            # Ensure they are lists
-            if not isinstance(data.get('quizzes'), list) or not isinstance(data.get('questions'), list):
-                 logging.warning(f"Invalid structure in {file_path}. 'quizzes' or 'questions' is not a list. Returning empty structure.")
-                 return empty_data
-
-            logging.info(f"Successfully loaded data from {file_path}")
-            return data
-
-    except FileNotFoundError:
-        logging.warning(f"Data file not found at {file_path}. Returning empty structure.")
-        # Optionally create an empty file here if desired for first run:
-        # save_quiz_data(empty_data, file_path)
-        return empty_data
-    except json.JSONDecodeError:
-        logging.error(f"Error decoding JSON from {file_path}. File might be corrupted. Returning empty structure.")
-        return empty_data
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while loading data from {file_path}: {e}", exc_info=True)
-        return empty_data
-
-
-def save_data(data: dict, file_path: str = DEFAULT_DATA_PATH) -> bool:
-    """
-    Saves quiz and question data to a JSON file.
-
-    Args:
-        data (dict): The dictionary containing 'quizzes' and 'questions' lists to save.
-        file_path (str): The path to the JSON data file.
-                         Defaults to 'data/quiz_data.json' in the project root.
-
-    Returns:
-        bool: True if saving was successful, False otherwise.
-    """
-    try:
-        # Ensure the target directory exists
-        data_dir = os.path.dirname(file_path)
-        os.makedirs(data_dir, exist_ok=True) # exist_ok=True prevents error if dir already exists
-
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=4, ensure_ascii=False) # indent for readability
-        logging.info(f"Successfully saved data to {file_path}")
-        return True
-    except TypeError as e:
-         logging.error(f"Error preparing data for JSON serialization: {e}. Check data structure.", exc_info=True)
-         return False
-    except IOError as e:
-        logging.error(f"Error writing data to {file_path}: {e}", exc_info=True)
-        return False
-    except Exception as e:
-        logging.error(f"An unexpected error occurred while saving data to {file_path}: {e}", exc_info=True)
-        return False
-
-# --- Example Usage (Optional - for testing this script directly) ---
-if __name__ == '__main__':
-    print(f"Project Root detected as: {PROJECT_ROOT}")
-    print(f"Default data path: {DEFAULT_DATA_PATH}")
-
-    # 1. Load existing data (will be empty initially)
-    current_data = load_data()
-    print(f"\nLoaded initial data:\n{json.dumps(current_data, indent=2)}")
-
-    # 2. Add some sample data (if it doesn't exist)
-    if not current_data['quizzes']:
-        print("\nAdding sample quiz and questions...")
-        q1_id = str(uuid.uuid4())
-        q2_id = str(uuid.uuid4())
-        quiz_id = str(uuid.uuid4())
-
-        current_data['questions'].extend([
-            {
-                "id": q1_id,
-                "text": "What keyword is used to define a function in Python?",
-                "type": "MCQ",
-                "options": ["def", "fun", "define", "function"],
-                "correct_answer": "def",
-                "score": 5,
-                "category": "Python Basics"
-            },
-            {
-                "id": q2_id,
-                "text": "What does 'pip' stand for?",
-                "type": "TEXT",
-                "correct_answer": "Pip Installs Packages", # Or 'Preferred Installer Program'
-                "score": 5,
-                "category": "Python Tools"
-            }
-        ])
-
-        current_data['quizzes'].append(
-            {
-                "id": quiz_id,
-                "title": "Intro Python Quiz",
-                "description": "A very basic Python quiz.",
-                "question_ids": [q1_id, q2_id],
-                "config": {
-                    "duration": 5,
-                    "passing_score": 50,
-                    "randomize_questions": False,
-                    "shuffle_answers": False,
-                    "presentation_mode": "all-at-once",
-                     "allow_back_navigation": True
-                }
-            }
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        # Running in a PyInstaller bundle
+        # Assume 'data' dir is copied next to executable by PyInstaller spec.
+        # This strategy requires the spec file to copy the 'data' folder
+        # using the 'datas' argument: datas=[('data', 'data')]
+        executable_dir = Path(sys.executable).parent
+        data_dir = executable_dir / "data"
+        print(
+            f"DEBUG [json_storage GetPath]: Running packaged. Using path relative to exe: {data_dir}"
         )
-
-        # 3. Save the updated data
-        success = save_data(current_data)
-        if success:
-            print("\nSample data saved successfully.")
-        else:
-            print("\nFailed to save sample data.")
-
-        # 4. Load again to verify
-        reloaded_data = load_data()
-        print(f"\nReloaded data after saving:\n{json.dumps(reloaded_data, indent=2)}")
     else:
-        print("\nData file already contains quizzes. Skipping sample data addition.")
+        # Running as standard Python script
+        # Assume this file is at src/core/json_storage.py
+        # Go up three levels from here to reach the project root (QuizPy/)
+        try:
+            # Path(__file__) is the path to this json_storage.py file
+            # .resolve() makes it absolute
+            # .parent gets the 'core' directory
+            # .parent.parent gets the 'src' directory
+            # .parent.parent.parent gets the 'QuizPy' project root directory
+            base_path = Path(__file__).resolve().parent.parent.parent
+            data_dir = base_path / "data"
+            print(
+                f"DEBUG [json_storage GetPath]: Running from source. Calculated base path: {base_path}, data dir: {data_dir}"
+            )
+            if not base_path.exists() or not (base_path / "src").exists():
+                print(
+                    "WARNING [json_storage GetPath]: Calculated base path seems incorrect. Falling back."
+                )
+                raise RuntimeError("Path calculation failed")  # Force fallback
+        except Exception as e:
+            print(
+                f"ERROR [json_storage GetPath]: Could not calculate standard path: {e}. Falling back to relative path."
+            )
+            # Fallback assumes script is run from project root (less reliable)
+            data_dir = Path(".") / "data"
+
+    # Ensure data directory exists (create if needed)
+    try:
+        data_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(
+            f"ERROR [json_storage GetPath]: Could not create data directory {data_dir}: {e}"
+        )
+        # Depending on requirements, could raise error or default to in-memory?
+
+    # Return the full path to the JSON file
+    return data_dir / "quiz_data.json"
+
+
+# --- End function definition ---
+
+
+# --- Define the path to the data file as a module-level constant ---
+DATA_FILE = get_data_file_path()
+print(f"INFO [json_storage]: Data file path set to: {DATA_FILE}")
+
+
+# --- Function to load data ---
+def load_data() -> dict:
+    """
+    Loads and parses data from the JSON file defined by DATA_FILE.
+    Returns a default structure if the file doesn't exist or is invalid.
+    """
+    # Define the default structure to return on failure
+    default_data = {"quizzes": [], "questions": [], "attempts": []}
+
+    if not DATA_FILE:  # Check if path resolution failed earlier
+        print(
+            "ERROR [json_storage load_data]: DATA_FILE path not set. Returning default."
+        )
+        return copy.deepcopy(default_data)  # Return copy
+
+    if not DATA_FILE.exists():
+        print(
+            f"WARNING [json_storage load_data]: File not found at {DATA_FILE}. Returning default."
+        )
+        return copy.deepcopy(default_data)  # Return copy
+
+    try:
+        # Open with UTF-8 encoding for broader compatibility
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        # Optional: Add validation here to ensure top-level keys exist?
+        if not isinstance(data, dict):
+            print(
+                f"ERROR [json_storage load_data]: Data in {DATA_FILE} is not a dictionary. Returning default."
+            )
+            return copy.deepcopy(default_data)
+
+        # Ensure top level keys exist
+        data.setdefault("quizzes", [])
+        data.setdefault("questions", [])
+        data.setdefault("attempts", [])
+
+        # print(f"INFO [json_storage load_data]: Successfully loaded data from {DATA_FILE}") # Can be noisy
+        return data  # Return the loaded data
+    except json.JSONDecodeError as e:
+        print(
+            f"ERROR [json_storage load_data]: Invalid JSON in {DATA_FILE}: {e}. Returning default."
+        )
+        return copy.deepcopy(default_data)  # Return copy
+    except Exception as e:
+        print(
+            f"ERROR [json_storage load_data]: Failed to read {DATA_FILE}: {e}. Returning default."
+        )
+        import traceback
+
+        traceback.print_exc()  # Log full traceback for unexpected errors
+        return copy.deepcopy(default_data)  # Return copy
+
+
+# --- Function to save data ---
+def save_data(data: dict):
+    """
+    Saves the provided dictionary data to the JSON file defined by DATA_FILE.
+    Uses UTF-8 encoding and pretty-printing (indent=2).
+    """
+    if not DATA_FILE:  # Check if path resolution failed
+        print("ERROR [json_storage save_data]: DATA_FILE path not set. Cannot save.")
+        return  # Or raise error
+
+    try:
+        # Ensure parent directory exists before writing (get_data_file_path should have done this)
+        DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
+        # Write with UTF-8 encoding and indentation
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        # print(f"INFO [json_storage save_data]: Successfully saved data to {DATA_FILE}") # Can be noisy
+    except TypeError as e:
+        # Often happens if data contains non-serializable types (like sets, datetime objects without serializer)
+        print(
+            f"ERROR [json_storage save_data]: Data not JSON serializable: {e}. Data was: {type(data)}"
+        )  # Avoid printing large data
+        # Add more detailed logging about *what* is not serializable if possible
+    except Exception as e:
+        print(
+            f"ERROR [json_storage save_data]: Failed to save data to {DATA_FILE}: {e}"
+        )
+        import traceback
+
+        traceback.print_exc()  # Log full traceback for unexpected errors

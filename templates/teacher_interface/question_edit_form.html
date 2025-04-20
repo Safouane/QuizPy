@@ -17,7 +17,8 @@
     <p>Loading question details...</p>
 </div>
 
-<form id="questionForm" class="d-none"> {# Initially hidden until JS decides create/edit loaded #}
+<form id="questionForm" class="d-none" enctype="multipart/form-data">
+    {# Initially hidden until JS decides create/edit loaded #}
     {% csrf_token %}
     <input type="hidden" id="questionId" value="{{ question_id|default:'' }}">
 
@@ -27,16 +28,30 @@
     <div class="row mb-3">
         <div class="col-md-8">
             <label for="questionText" class="form-label">Question Text <span class="text-danger">*</span></label>
-            <textarea class="form-control" id="questionText" rows="4" required></textarea>
-            {# Placeholder for potential Rich Text Editor integration later #}
+            {# --- ADD name="text" --- #}
+            <textarea class="form-control" id="questionText" name="text" rows="4"></textarea>
+            <small class="text-muted">Required if no Question Image is provided.</small>
+            <div class="mt-2">
+                <label for="questionMediaFile" class="form-label">Optional Question Image:</label>
+                <input class="form-control form-control-sm" type="file" id="questionMediaFile" name="question_media"
+                    accept="image/*">
+                <div id="questionMediaPreview" class="mt-2" style="max-height: 150px; overflow: hidden;">
+                    {# JS will add <img> tag here #}
+                    <small id="questionMediaExisting" class="text-muted"></small> {# To show existing filename #}
+                </div>
+                <button type="button" id="removeQuestionMediaBtn"
+                    class="btn btn-sm btn-outline-danger mt-1 d-none">Remove
+                    Image</button>
+            </div>
+            {# --- END ADDED --- #}
         </div>
         <div class="col-md-4">
             <label for="questionType" class="form-label">Question Type <span class="text-danger">*</span></label>
-            <select class="form-select" id="questionType" required>
-                <option value="" selected disabled>Select type...</option>
-                <option value="MCQ">Multiple Choice (Single/Multiple Correct)</option>
-                <option value="SHORT_TEXT">Short Text Answer</option>
-                {# <option value="MEDIA">Media Based (Not Implemented)</option> #}
+            <select class="form-select" id="questionType" name="type" required> {# <<< ADD/VERIFY name="type" #} <option
+                    value="" selected disabled>Select type...</option>
+                    <option value="MCQ">Multiple Choice (Single/Multiple Correct)</option>
+                    <option value="SHORT_TEXT">Short Text Answer</option>
+                    {# <option value="MEDIA">Media Based (Not Implemented)</option> #}
             </select>
         </div>
     </div>
@@ -85,7 +100,7 @@
         <div id="correctAnswerInputGroup" class="mb-3 d-none"> {# Initially hidden #}
             <label for="shortAnswerCorrectText" class="form-label">Correct Answer Text <span
                     class="text-danger">*</span></label>
-            <input type="text" class="form-control" id="shortAnswerCorrectText"
+            <input type="text" class="form-control" id="shortAnswerCorrectText" name="shortAnswerCorrectText"
                 placeholder="Enter the exact correct answer">
             <small class="text-muted">Case-sensitive matching will be used.</small>
         </div>
@@ -103,11 +118,13 @@
     <div class="row mb-3">
         <div class="col-md-4">
             <label for="questionScore" class="form-label">Score/Points</label>
-            <input type="number" class="form-control" id="questionScore" value="1" min="0">
+            {# --- ADD name="score" --- #}
+            <input type="number" class="form-control" id="questionScore" name="score" value="1" min="0">
         </div>
         <div class="col-md-4">
             <label for="questionDifficulty" class="form-label">Difficulty</label>
-            <select class="form-select" id="questionDifficulty">
+            {# --- ADD name="difficulty" --- #}
+            <select class="form-select" id="questionDifficulty" name="difficulty">
                 <option value="Easy">Easy</option>
                 <option value="Medium" selected>Medium</option>
                 <option value="Hard">Hard</option>
@@ -115,7 +132,9 @@
         </div>
         <div class="col-md-4">
             <label for="questionCategory" class="form-label">Category/Tag</label>
-            <input type="text" class="form-control" id="questionCategory" placeholder="e.g., Algebra, History Ch.3">
+            {# --- ADD name="category" --- #}
+            <input type="text" class="form-control" id="questionCategory" name="category"
+                placeholder="e.g., Algebra, Math">
             {# Consider using datalist with existing_categories if passed from view #}
         </div>
     </div>
@@ -170,6 +189,12 @@
     const mcqSingleChoiceSwitch = document.getElementById('mcqSingleChoice');
     const mcqInstructionSmall = document.getElementById('mcqInstruction'); // Get instruction text
 
+    const questionMediaFileInput = document.getElementById('questionMediaFile');
+    const questionMediaPreviewDiv = document.getElementById('questionMediaPreview');
+    const questionMediaExistingSmall = document.getElementById('questionMediaExisting');
+    const removeQuestionMediaBtn = document.getElementById('removeQuestionMediaBtn');
+    // Selectors for option media will be handled dynamically within addMcqOptionInput
+
 
     // --- Event Listeners ---
     questionType.addEventListener('change', handleQuestionTypeChange);
@@ -181,6 +206,66 @@
 
     reviewModeRadios.forEach(radio => { // Add listener for radio buttons
         radio.addEventListener('change', toggleCorrectAnswerInput);
+    });
+
+    // --- Event Listeners for File Inputs ---
+    if (questionMediaFileInput) {
+        questionMediaFileInput.addEventListener('change', function () {
+            if (this.files && this.files[0]) {
+                displayImagePreview(this.files[0], questionMediaPreviewDiv, questionMediaExistingSmall);
+                if (removeQuestionMediaBtn) removeQuestionMediaBtn.classList.remove('d-none'); // Show remove button
+            } else {
+                // No file selected, maybe clear preview if needed?
+                // If there was an existing file, clicking cancel shouldn't clear it yet.
+            }
+        });
+    }
+    if (removeQuestionMediaBtn) {
+        removeQuestionMediaBtn.addEventListener('click', function () {
+            // TODO: Need a way to signal to the backend PUT request that the image should be removed/nulled out.
+            // Simplest way for now: just clear the preview and input client-side.
+            // The PUT request currently doesn't handle file removal.
+            // We'll just clear the UI for now.
+            clearMediaPreview(questionMediaFileInput, questionMediaPreviewDiv, questionMediaExistingSmall, removeQuestionMediaBtn);
+            console.log("DEBUG: Cleared question media preview and input.");
+            // We'd need to enhance the PUT API and send a flag like 'remove_question_media=true'
+            // if the user explicitly clicks remove.
+        });
+    }
+
+    // Need delegation for dynamically added option remove buttons
+    mcqOptionsContainer.addEventListener('click', function (event) {
+        // Handle Option Delete
+        if (event.target.closest('.delete-option-btn')) {
+            event.target.closest('.input-group').remove();
+        }
+        // Handle Option Media Remove
+        const removeMediaBtn = event.target.closest('.remove-option-media-btn');
+        if (removeMediaBtn) {
+            const parentGroup = removeMediaBtn.closest('.input-group');
+            const fileInput = parentGroup.querySelector('.option-media-file');
+            const previewDiv = parentGroup.querySelector('.option-media-preview');
+            const existingSmall = parentGroup.querySelector('.option-media-existing');
+            clearMediaPreview(fileInput, previewDiv, existingSmall, removeMediaBtn);
+            console.log("DEBUG: Cleared option media preview and input.");
+            // TODO: Again, need mechanism to tell backend PUT to remove this option's image.
+        }
+    });
+
+    // Need delegation for dynamically added option file inputs
+    mcqOptionsContainer.addEventListener('change', function (event) {
+        if (event.target.classList.contains('option-media-file')) {
+            const fileInput = event.target;
+            const parentGroup = fileInput.closest('.input-group');
+            const previewDiv = parentGroup.querySelector('.option-media-preview');
+            const existingSmall = parentGroup.querySelector('.option-media-existing');
+            const removeBtn = parentGroup.querySelector('.remove-option-media-btn');
+
+            if (fileInput.files && fileInput.files[0]) {
+                displayImagePreview(fileInput.files[0], previewDiv, existingSmall);
+                if (removeBtn) removeBtn.classList.remove('d-none');
+            }
+        }
     });
 
     // --- Initialization ---
@@ -204,6 +289,57 @@
 
 
     // --- Core Logic Functions ---
+
+    /**
+     * Displays a preview of the selected image file.
+     * @param {File} file - The image file object.
+     * @param {HTMLElement} previewElement - The div where the <img> preview should be placed.
+     * @param {HTMLElement} [existingInfoElement] - Optional: Element showing existing filename to hide.
+     */
+    function displayImagePreview(file, previewElement, existingInfoElement = null) {
+        if (!file || !previewElement) return;
+        if (!file.type.startsWith('image/')) { // Basic type check
+            previewElement.innerHTML = '<small class="text-danger">Invalid file type</small>';
+            return;
+        }
+        previewElement.innerHTML = ''; // Clear previous preview or text
+        if (existingInfoElement) existingInfoElement.textContent = ''; // Clear existing filename text
+
+        const img = document.createElement('img');
+        img.classList.add('img-thumbnail'); // Bootstrap class
+        img.style.maxHeight = '100px'; // Limit preview size
+        img.file = file; // Store file object on img element (optional)
+
+        previewElement.appendChild(img);
+
+        const reader = new FileReader();
+        reader.onload = (e) => { img.src = e.target.result; };
+        reader.readAsDataURL(file);
+    }
+
+    /**
+     * Displays existing media filename and shows remove button.
+     */
+    function displayExistingMedia(filename, previewElement, existingInfoElement, removeBtn) {
+        if (!filename || !previewElement || !existingInfoElement || !removeBtn) return;
+        previewElement.innerHTML = ''; // Clear image previews
+        existingInfoElement.textContent = `Current: ${escapeHTML(filename)}`;
+        removeBtn.classList.remove('d-none'); // Show remove button
+        removeBtn.dataset.filenameToRemove = filename; // Store filename for removal logic
+    }
+
+    /**
+     * Clears media preview, input, and hides remove button.
+     */
+    function clearMediaPreview(fileInput, previewElement, existingInfoElement, removeBtn) {
+        if (fileInput) fileInput.value = null; // Clear the file input
+        if (previewElement) previewElement.innerHTML = ''; // Clear preview img
+        if (existingInfoElement) existingInfoElement.textContent = ''; // Clear existing text
+        if (removeBtn) {
+            removeBtn.classList.add('d-none'); // Hide remove button
+            delete removeBtn.dataset.filenameToRemove;
+        }
+    }
 
     // Handle change on the "Single Choice" switch
     function handleSingleChoiceChange() {
@@ -316,36 +452,65 @@
         }
     }
 
-    function addMcqOptionInput(optionText = '', isCorrect = false, optionId = null) {
-        const isSingle = mcqSingleChoiceSwitch.checked; // Check current mode
+    function addMcqOptionInput(optionText = '', isCorrect = false, optionId = null, optionMediaFilename = null) {
+        const isSingle = mcqSingleChoiceSwitch.checked;
         const inputType = isSingle ? 'radio' : 'checkbox';
-        const uniqueGroupName = isSingle ? mcqOptionsContainer.querySelector('input[type=radio]')?.name || `mcq_correct_group_${Date.now()}` : ''; // Get existing radio group name or create new
-        const inputName = isSingle ? uniqueGroupName : `mcq_correct_answer_check_${optionId || Date.now()}`; // Unique name for checkbox
-        const optionIndex = mcqOptionsContainer.childElementCount;
+        const optionIndex = mcqOptionsContainer.childElementCount; // Use index for unique names
+        const uniqueGroupName = isSingle ? (mcqOptionsContainer.querySelector('input[type=radio]')?.name || `mcq_correct_group_${Date.now()}`) : '';
+        const inputName = isSingle ? uniqueGroupName : `options_correct[${optionIndex}]`; // Name for correct flag
+        const optionTempId = optionId || `new_${optionIndex}`; // Temporary ID for association
 
         const div = document.createElement('div');
+        div.classList.add('input-group', 'mb-3'); // Increased margin
+        div.dataset.optionId = optionTempId; // Store original ID or temp ID
 
-        div.classList.add('input-group', 'mb-2');
-        // Use optionId if provided (from edit mode), otherwise it's just for client-side structure
-        div.dataset.optionId = optionId || `temp_${optionIndex}`;
-
+        // --- Modified Inner HTML ---
         div.innerHTML = `
-            <div class="input-group-text">
-                <input class="form-check-input mt-0 correct-answer-checkbox"
-                    type="${inputType}"
-                    name="${inputName}"
-                    value="${optionId || 'new'}" {# Value might need linking to option ID #}
-                    aria-label="Mark as correct answer" ${isCorrect ? 'checked' : ''}>
-            </div>
-            <input type="text" class="form-control mcq-option-text" value="${escapeHTML(optionText)}" placeholder="Enter answer option..." required>
-            <button class="btn btn-outline-danger delete-option-btn" type="button" title="Remove option">
-                <i class="bi bi-x-lg"></i>
-            </button>
-        `;
+        <div class="input-group-text">
+            <input class="form-check-input mt-0 correct-answer-checkbox"
+                   type="${inputType}"
+                   name="${inputName}" {# Name for radio group or unique for checkbox #}
+                   value="on" {# Standard value for checkbox/radio state #}
+                   data-option-index="${optionIndex}" {# Link to other fields #}
+                   aria-label="Mark as correct answer" ${isCorrect ? 'checked' : ''}>
+        </div>
+        {# Text Input - always include for association, maybe hide if only image? #}
+        <input type="text" class="form-control mcq-option-text"
+               name="options_text[${optionIndex}]"
+               value="${escapeHTML(optionText || '')}" {# Handle null text #}
+               placeholder="Option ${optionIndex + 1} Text (Optional if Image)" >
+
+        {# File Input & Preview #}
+        <div class="ms-2 d-flex flex-column justify-content-center" style="flex-basis: 200px;">
+             <input type="file" class="form-control form-control-sm option-media-file"
+                    name="options_media[${optionIndex}]" {# Indexed name for backend #}
+                    id="option_media_${optionTempId}" accept="image/*">
+             <div class="option-media-preview mt-1" style="max-height: 50px; overflow: hidden;">
+                <small class="option-media-existing text-muted"></small>
+             </div>
+             <button type="button" class="btn btn-sm btn-outline-danger mt-1 remove-option-media-btn d-none" style="font-size: 0.7rem; padding: 0.1rem 0.3rem;">Remove Img</button>
+        </div>
+
+        {# Delete Option Button #}
+        <button class="btn btn-outline-danger delete-option-btn" type="button" title="Remove this entire option">
+            <i class="bi bi-x-lg"></i>
+        </button>
+    `;
         mcqOptionsContainer.appendChild(div);
-        // If adding first radio, ensure name is set on subsequent adds
-        if (isSingle && mcqOptionsContainer.querySelectorAll('input[type=radio]').length === 1) {
-            mcqOptionsContainer.querySelector('input[type=radio]').name = uniqueGroupName;
+
+        // If editing and media exists, display it
+        const previewDiv = div.querySelector('.option-media-preview');
+        const existingSmall = div.querySelector('.option-media-existing');
+        const removeBtn = div.querySelector('.remove-option-media-btn');
+        if (optionMediaFilename && previewDiv && existingSmall && removeBtn) {
+            displayExistingMedia(optionMediaFilename, previewDiv, existingSmall, removeBtn);
+            // Potentially show thumbnail instead of just filename? Requires constructing URL.
+            // previewDiv.innerHTML = `<img src="/media_files/${escapeHTML(optionMediaFilename)}" class="img-thumbnail" style="max-height: 50px;">`;
+        }
+        // Ensure radio names are consistent if single choice
+        if (isSingle) {
+            const radioButtons = mcqOptionsContainer.querySelectorAll('input[type="radio"].correct-answer-checkbox');
+            radioButtons.forEach(rb => rb.name = uniqueGroupName);
         }
     }
 
@@ -392,6 +557,15 @@
         mediaUrlInput.value = qData.media_url || '';
         mcqSingleChoiceSwitch.checked = qData.mcq_is_single_choice || false; // <<< Populate checkbox
 
+        // --- Populate Question Media ---
+        clearMediaPreview(questionMediaFileInput, questionMediaPreviewDiv, questionMediaExistingSmall, removeQuestionMediaBtn); // Clear first
+        if (qData.media_filename) {
+            displayExistingMedia(qData.media_filename, questionMediaPreviewDiv, questionMediaExistingSmall, removeQuestionMediaBtn);
+            // Optional: Show thumbnail
+            // questionMediaPreviewDiv.innerHTML = `<img src="/media_files/${escapeHTML(qData.media_filename)}" class="img-thumbnail" style="max-height: 100px;">`;
+        }
+        // --- End Question Media ---
+
 
         // Populate Short Text fields if applicable
         if (qData.type === 'SHORT_TEXT') {
@@ -412,7 +586,8 @@
         if (qData.type === 'MCQ' && qData.options) {
             qData.options.forEach(option => {
                 const isCorrect = qData.correct_answer?.includes(option.id);
-                addMcqOptionInput(option.text, isCorrect, option.id); // addMcqOptionInput now respects switch state
+                // Pass media filename to addMcqOptionInput
+                addMcqOptionInput(option.text, isCorrect, option.id, option.media_filename); // <<< Pass media filename
             });
         }
 
@@ -421,131 +596,331 @@
     }
 
 
+    /**
+     * Handles the submission of the question form.
+     * Performs client-side validation, prepares data (FormData or JSON),
+     * sends the request to the appropriate backend API endpoint (POST for create, PUT for update),
+     * and handles the response (success message, error display, UI state).
+     */
     async function handleFormSubmit(event) {
-        event.preventDefault();
-        clearMessages();
-        showSavingSpinner(true);
+        event.preventDefault(); // Prevent default browser form submission
+        console.log(">>> DEBUG: Submit event listener entered!");
+        clearMessages(); // Clear previous success/error messages
 
-        // --- Collect Common Data ---
-        const type = questionType.value;
-        const text = questionText.value;
-        const score = questionScore.value;
-        const difficulty = questionDifficulty.value;
-        const category = questionCategory.value;
-        const mediaUrl = mediaUrlInput.value; // Added
-
-        if (!text || !type) {
-            showError("Question Text and Type are required.");
-            showSavingSpinner(false);
-            return;
+        // --- 1. Get FormData ---
+        const formData = new FormData(questionForm);
+        // Log FormData content for debugging
+        console.log("DEBUG: FormData entries on submit:");
+        for (let pair of formData.entries()) {
+            if (pair[1] instanceof File) { console.log(`  ${pair[0]}: File - ${pair[1].name} (${pair[1].size} bytes)`); }
+            else { console.log(`  ${pair[0]}: ${pair[1]}`); }
         }
 
-        // --- Prepare Payload ---
-        const payload = { text, type, score, difficulty, category, media_url: mediaUrl };
+        // --- 2. Collect & Validate Core Fields ---
+        const type = formData.get('type');
+        const text = formData.get('text')?.trim(); // Use name="text" on textarea
+        const questionMediaFile = formData.get('question_media');
+        const hasQuestionMedia = questionMediaFile && questionMediaFile instanceof File && questionMediaFile.size > 0;
+        console.log("DEBUG: Values for Validation - Type:", type, "| Text:", `"${text}"`, "| HasMedia:", hasQuestionMedia);
 
-        // --- Collect Type-Specific Data ---
-        // --- Collect Type-Specific Data ---
+        // Validation 1: Type
+        if (!type) {
+            showError("Question Type is required.");
+            console.error("Validation Failed: Question type is missing.");
+            return; // Stop processing
+        }
+        // Validation 2: Text OR Image
+        if (!text && !hasQuestionMedia) {
+            showError("Question Text OR a valid Question Image is required.");
+            console.error("Validation Failed: Neither text nor valid question media provided.");
+            return; // Stop processing
+        }
+        console.log("DEBUG: Basic Validations Passed (Type and Text/Image).");
+
+        // --- 3. Validation and Data Collection for Specific Types ---
         if (type === 'MCQ') {
-            const options = [];
-            const correctAnswers = []; // Still collect TEXTS for backend
+            console.log("DEBUG: Validating MCQ fields...");
             const optionGroups = mcqOptionsContainer.querySelectorAll('.input-group');
             const isSingle = mcqSingleChoiceSwitch.checked;
-            payload.mcq_is_single_choice = isSingle; // <<< Include flag in payload
-
-            // Basic validation
-            if (optionGroups.length < 2) { /* ... error ... */ return; }
-
+            let validOptionCount = 0;
             let correctCount = 0;
-            optionGroups.forEach(group => {
-                const optionTextInput = group.querySelector('.mcq-option-text');
-                const optionText = optionTextInput.value.trim();
-                const correctInput = group.querySelector('.correct-answer-checkbox'); // Checkbox or Radio
 
-                if (optionText) {
-                    options.push(optionText);
-                    if (correctInput.checked) {
-                        correctAnswers.push(optionText);
-                        correctCount++;
-                    }
-                }
+            optionGroups.forEach((group) => { // Iterate through current DOM options
+                const optionTextInput = group.querySelector('.mcq-option-text');
+                const optionMediaInput = group.querySelector('.option-media-file');
+                const correctInput = group.querySelector('.correct-answer-checkbox');
+                let hasContent = false;
+                if (optionTextInput && optionTextInput.value.trim()) hasContent = true;
+                // Check the files property of the input element, not just the FormData entry
+                if (!hasContent && optionMediaInput && optionMediaInput.files.length > 0) hasContent = true;
+                // TODO: Enhance check for existing media during edit mode if needed
+
+                if (hasContent) validOptionCount++;
+                if (correctInput && correctInput.checked) correctCount++;
             });
 
-            // Final validation before submit
-            if (options.length < 2) { /* ... error ... */ return; }
-            if (isSingle && correctCount !== 1) {
-                showError("Please select exactly one correct answer for single-choice MCQ.");
-                showSavingSpinner(false); return;
-            }
-            if (!isSingle && correctCount === 0) {
-                showError("Please select at least one correct answer for multiple-choice MCQ.");
-                showSavingSpinner(false); return;
-            }
-
-            payload.options = options;
-            payload.correct_answer_texts = correctAnswers;
-
-        } else if (type === 'SHORT_TEXT') {
-            const reviewMode = document.querySelector('input[name="shortAnswerReviewMode"]:checked').value;
-            const correctText = shortAnswerCorrectText.value.trim();
-
-            payload.short_answer_review_mode = reviewMode;
-            if (reviewMode === 'auto') {
-                if (!correctText) {
-                    showError("Correct Answer Text is required for Automatic Review mode.");
-                    showSavingSpinner(false);
-                    return;
-                }
-                payload.short_answer_correct_text = correctText;
-            }
-            // else: no need to send correct_text if mode is manual
-
-            // No specific fields needed for payload based on API-2
-        } else if (type === 'MEDIA') {
-            // Payload already includes media_url
-            // Add validation if needed (e.g., check if URL is present)
+            if (validOptionCount < 2) { showError("MCQ requires at least two valid options (with text or image)."); return; }
+            if (isSingle && correctCount !== 1) { showError("Single-choice MCQ requires exactly one correct answer."); return; }
+            if (!isSingle && correctCount === 0) { showError("Multiple-choice MCQ requires at least one correct answer."); return; }
+            console.log("DEBUG: MCQ Validations Passed.");
         }
+        else if (type === 'SHORT_TEXT') {
+            const autoModeSelected = document.getElementById('reviewModeAuto').checked;
+            const correctTextInput = document.getElementById('shortAnswerCorrectText');
+            if (autoModeSelected && (!correctTextInput || !correctTextInput.value.trim())) {
+                showError("Correct Answer Text is required for Automatic Review mode."); return;
+            }
+            console.log("DEBUG: Short Text Validations Passed.");
+        }
+        // Add validation for other types if necessary
 
-        // --- Determine API Endpoint and Method ---
+        // --- If ALL client validation passes, NOW disable button and proceed ---
+        console.log("DEBUG: All Client Validations Passed. Proceeding with submission.");
+        showSavingSpinner(true); // Disable button, show spinner
+
+
+        // --- 4. Determine API Endpoint, Method, and Payload ---
         let apiUrl;
         let apiMethod;
+        let payloadToSend;
+        let contentType = null; // Default for FormData
+
         if (questionId) {
+            // --- EDIT MODE (Simplified PUT - No Files unless API is enhanced) ---
+            console.log("DEBUG: Preparing PUT request (Edit Mode - No Media Update).");
             apiUrl = `/api/questions/${questionId}/`;
             apiMethod = 'PUT';
+
+            // Check if user tried to upload files in edit mode (backend doesn't support it via PUT)
+            const hasNewQuestionMedia = questionMediaFileInput && questionMediaFileInput.files.length > 0;
+            const hasNewOptionMedia = mcqOptionsContainer.querySelector('.option-media-file')?.files.length > 0; // Check if any option file input has a file
+
+            if (hasNewQuestionMedia || hasNewOptionMedia) {
+                showError("Updating questions with new media files is not yet supported via this edit form. Please create a new question instead.");
+                showSavingSpinner(false); return; // Stop submission
+            }
+
+            // --- Reconstruct simple JSON payload for allowed fields ---
+            const simplePayload = {
+                text: formData.get('text'),
+                score: parseInt(formData.get('score') || '1', 10),
+                difficulty: formData.get('difficulty'),
+                category: formData.get('category'),
+                mcq_is_single_choice: mcqSingleChoiceSwitch.checked, // Read directly
+                quiz_ids: formData.getAll('quiz_ids[]'), // Assuming quiz_ids are handled elsewhere if needed for PUT
+                // Add Short Text fields
+                short_answer_review_mode: document.querySelector('input[name="shortAnswerReviewMode"]:checked')?.value || 'manual',
+                short_answer_correct_text: document.getElementById('shortAnswerCorrectText')?.value.trim() || null
+            };
+            // Nullify correct text if mode is manual
+            if (simplePayload.short_answer_review_mode === 'manual') {
+                simplePayload.short_answer_correct_text = null;
+            }
+            // TODO: Reconstruct options text/correct state if PUT API needs it
+            // This requires iterating DOM again. For now, assume PUT focuses on core fields.
+
+            console.warn("PUT request sending simplified JSON payload:", simplePayload);
+            payloadToSend = JSON.stringify(simplePayload);
+            contentType = 'application/json'; // Set Content-Type for JSON
+
         } else {
-            apiUrl = "{% url 'quiz:question_list_create' %}"; // Use named URL for create
+            // --- CREATE MODE (Uses FormData directly) ---
+            console.log("DEBUG: Preparing POST request (Create Mode - With Potential Media).");
+            apiUrl = "{% url 'quiz:question_list_create' %}";
             apiMethod = 'POST';
-            // TODO: How to associate with a quiz if needed?
-            // Maybe pass quiz_id in payload if coming from quiz edit page?
-            // payload.quiz_ids = ["TARGET_QUIZ_ID_IF_APPLICABLE"];
+            // Start with the already populated formData object
+            payloadToSend = formData; // Send FormData
+
+            // --- Conditionally Append Extra Data to FormData ---
+            const currentType = payloadToSend.get('type'); // Get type again from FormData
+
+            if (currentType === 'MCQ') {
+                console.log("DEBUG: Appending MCQ specific flags to FormData");
+                // Append single choice flag
+                payloadToSend.append('mcq_is_single_choice', mcqSingleChoiceSwitch.checked ? 'true' : 'false');
+                // Append correct flags based on DOM state (safer than relying on earlier validation vars)
+                const optionGroups = mcqOptionsContainer.querySelectorAll('.input-group'); // Get groups here
+                optionGroups.forEach((group, index) => {
+                    const correctInput = group.querySelector('.correct-answer-checkbox');
+                    if (correctInput && correctInput.checked) {
+                        // Use the index to match backend expectation
+                        payloadToSend.append(`options_correct[${index}]`, 'on');
+                        console.log(`DEBUG: Appending options_correct[${index}]=on`);
+                    }
+                    // Ensure text is present if needed (FormData should capture it if name is set)
+                    // const textInput = group.querySelector('.mcq-option-text');
+                    // if (textInput && !payloadToSend.has(`options_text[${index}]`)) {
+                    //    payloadToSend.append(`options_text[${index}]`, textInput.value);
+                    // }
+                });
+            }
+            else if (currentType === 'SHORT_TEXT') {
+                console.log("DEBUG: Appending Short Text specific fields to FormData");
+                // Add short text review mode/answer to formData
+                payloadToSend.append('short_answer_review_mode', document.querySelector('input[name="shortAnswerReviewMode"]:checked').value);
+                payloadToSend.append('short_answer_correct_text', document.getElementById('shortAnswerCorrectText').value);
+            }
+
+            // Add quiz_ids if creating in context
+            const urlParams = new URLSearchParams(window.location.search);
+            const originatingQuizId = urlParams.get('quiz_id');
+            if (originatingQuizId) {
+                payloadToSend.append('quiz_ids[]', originatingQuizId);
+                console.log("DEBUG: Appending originating quiz ID to FormData:", originatingQuizId);
+            }
+            // --- End Appending Extra Data ---
+
+            contentType = null; // Browser sets Content-Type for FormData
         }
 
-        // --- Send API Request ---
+
+        // --- 5. Send API Request ---
+        // This block executes after all validation passes and the payload (payloadToSend)
+        // and API details (apiUrl, apiMethod, contentType) are determined.
+        console.log(`DEBUG: Sending ${apiMethod} request to ${apiUrl}`);
+        // Log the final payload right before fetch for POST FormData case
+        if (apiMethod === 'POST' && payloadToSend instanceof FormData) {
+            console.log("DEBUG: Final FormData entries before POST:");
+            for (let pair of payloadToSend.entries()) {
+                if (pair[1] instanceof File) { console.log(`  ${pair[0]}: File - ${pair[1].name} (${pair[1].size} bytes)`); }
+                else { console.log(`  ${pair[0]}: ${pair[1]}`); }
+            }
+        } else if (apiMethod === 'PUT') {
+            // For PUT using JSON string
+            console.log("DEBUG: Final JSON payload before PUT:", payloadToSend);
+        }
+
         try {
-            const csrfToken = questionForm.querySelector('[name=csrfmiddlewaretoken]').value;
+            // Attempt to get CSRF token from the hidden form input first
+            let csrfToken = formData.get('csrfmiddlewaretoken');
+            // If not found in form (e.g., if form structure changes), try getting from cookie
+            if (!csrfToken) {
+                csrfToken = getCookie('csrftoken');
+                console.log("DEBUG: CSRF token read from cookie.");
+            } else {
+                console.log("DEBUG: CSRF token read from form data.");
+            }
+            // If still no token, throw an error to prevent request without it
+            if (!csrfToken) {
+                throw new Error("CSRF Token not found. Cannot submit form securely.");
+            }
+
+            // Prepare headers
+            const headers = {
+                'X-CSRFToken': csrfToken
+                // Content-Type is NOT set here for FormData (browser handles it)
+                // It IS set here if we are sending JSON (PUT request)
+            };
+            if (contentType) { // Only add Content-Type if it's specified (i.e., for JSON PUT)
+                headers['Content-Type'] = contentType;
+                console.log("DEBUG: Setting Content-Type header to:", contentType);
+            } else {
+                console.log("DEBUG: Letting browser set Content-Type for FormData.");
+            }
+
+
+            // Make the asynchronous fetch call to the backend API
             const response = await fetch(apiUrl, {
                 method: apiMethod,
-                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
-                body: JSON.stringify(payload)
+                headers: headers,
+                body: payloadToSend // This is either the FormData object or a JSON string
             });
-            const data = await response.json();
+            console.log(">>> DEBUG: FETCH call completed.");
 
-            if (response.ok) {
-                const successMsg = questionId ? 'Question updated successfully!' : 'Question created successfully!';
-                showSuccess(successMsg + " Redirecting...");
-                // Redirect (e.g., to dashboard or question bank TCHR-4)
-                setTimeout(() => {
-                    window.location.href = "{% url 'teacher_interface:dashboard' %}"; // Redirect to dashboard for now
-                }, 1500);
-            } else {
-                showError(data.error || `An error occurred (${response.status})`);
-                showSavingSpinner(false);
+
+            // --- Process the response ---
+            let data = {}; // Initialize empty object for response data
+            try {
+                // Attempt to parse the response body as JSON.
+                // This might fail if the server sends an empty body or non-JSON error page.
+                data = await response.json();
+                console.log("DEBUG: Save API Response Status:", response.status);
+                console.log("DEBUG: Save API Response Data (Parsed):", data);
+            } catch (e) {
+                console.error("Could not parse JSON response:", e);
+                // If JSON parsing fails, create a fallback error message using status text.
+                // This handles cases like HTML error pages being returned instead of JSON errors.
+                data = { error: `Server returned status ${response.status}: ${response.statusText || 'No response body'}` };
+                console.log("DEBUG: Save API Response Status:", response.status);
+                console.log("DEBUG: Save API Response Data (Fallback):", data);
             }
-        } catch (error) {
-            console.error('Error saving question:', error);
-            showError('An unexpected error occurred while saving.');
-            showSavingSpinner(false);
+
+
+            if (response.ok) { // Check for 2xx status
+                // --- Success ---
+                const successMsg = questionId ? 'Question updated successfully!' : 'Question created successfully!';
+
+                // if (apiMethod === 'POST') {
+                //     // Successfully CREATED a question in a separate tab
+                //     showSuccess(successMsg + " You can now close this tab or create another question.");
+
+                //     // 1. Reset the form fields to clear the previous entry
+                //     questionForm.reset();
+                //     console.log("DEBUG: Form reset after successful creation.");
+
+                //     // 2. Clear dynamic areas explicitly (reset doesn't remove added elements)
+                //     mcqOptionsContainer.innerHTML = ''; // Clear MCQ options
+                //     clearMediaPreview(questionMediaFileInput, questionMediaPreviewDiv, questionMediaExistingSmall, removeQuestionMediaBtn); // Clear question media preview
+
+                //     // 3. Reset UI states / Hide dynamic sections initially
+                //     handleQuestionTypeChange(); // Reset visibility based on empty type select
+                //     handleSingleChoiceChange(); // Reset MCQ specific UI if needed
+
+                //     // 4. Re-enable form fields for creating another question
+                //     questionForm.querySelectorAll('input, textarea, select, button').forEach(el => {
+                //         // Re-enable most fields, but keep Save button initially disabled maybe?
+                //         // Or re-enable all and rely on validation? Let's re-enable most.
+                //         if (el.id !== 'saveButton') { // Don't re-enable Save button immediately
+                //             el.disabled = false;
+                //         }
+                //     });
+
+                //     // 5. Ensure Save button is disabled initially and spinner is hidden
+                //     saveButton.disabled = true; // Keep disabled until user interacts
+                //     showSavingSpinner(false); // Ensure spinner is hidden
+
+                //     // Add listener to re-enable save button on input? complex.
+                //     // Or just let user click -> validation fails -> button re-enables? Simpler.
+
+
+                // } else { // PUT Success (Update)
+                //     showSuccess(successMsg + " Redirecting back to Question Bank...");
+                //     setTimeout(() => {
+                //         window.location.href = "{% url 'teacher_interface:question_bank' %}";
+                //     }, 1500);
+                //     // No need to call showSavingSpinner(false) here as the page will navigate away
+                // }
+                // --- Success ---
+
+                // --- MODIFIED LOGIC FOR BOTH POST (Create) & PUT (Update) ---
+                // Show success message briefly before redirecting
+                showSuccess(successMsg + " Redirecting back to Question Bank...");
+
+                // Redirect back to the question bank after a short delay
+                setTimeout(() => {
+                    window.location.href = "{% url 'teacher_interface:question_bank' %}";
+                }, 1500); // 1.5 seconds delay
+                // --- END MODIFIED LOGIC ---
+
+            } else { // Handle API error response (e.g., 400, 500)
+                // ... (existing error handling - ensure showSavingSpinner(false) is called) ...
+            }
+        } catch (error) { // Handle network/JS errors
+            // ... (existing error handling - ensure showSavingSpinner(false) is called) ...
+            // } finally {
+            //     // Reset submission flag only if an error occurred keeping user on page
+            //     if (!response || !response.ok) { // Check if response exists and was not OK
+            //         submissionInProgress = false;
+            //         console.log("DEBUG: Reset submissionInProgress = false in finally block after error.");
+            //     } else if (apiMethod === 'POST') {
+            //         // Reset flag even after successful POST if staying on page
+            //         submissionInProgress = false;
+            //         console.log("DEBUG: Reset submissionInProgress = false in finally block after successful POST.");
+            //     }
         }
-    }
+
+    } // End handleFormSubmit
+
 
 
     // --- Helper Functions (keep from previous steps) ---
