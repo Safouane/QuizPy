@@ -15,6 +15,7 @@ Including another URLconf
     1. Import the include() function: from django.urls import include, path
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -22,9 +23,23 @@ from django.urls import path, include
 
 # Import dynamically calculated media settings from views
 try:
-    from quiz.views import MEDIA_URL_ROOT, MEDIA_ROOT_DIR
+    # Use the correct helper from json_storage to get the directory
+    from core.json_storage import get_media_dir
+
+    # MEDIA_URL_ROOT is conceptually defined, can get from quiz.views or define here/settings
+    try:
+        from quiz.views import MEDIA_URL_ROOT
+    except ImportError:
+        MEDIA_URL_ROOT = "/media_files/"  # Fallback if views not loaded yet
+
+    MEDIA_ROOT_DIR_FOR_URLS = get_media_dir()  # <<< Use get_media_dir()
 except ImportError:
-    MEDIA_URL_ROOT, MEDIA_ROOT_DIR = None, None
+    print(
+        "WARNING [Urls]: Could not import MEDIA settings from storage/views for dev serving."
+    )
+    MEDIA_URL_ROOT = None
+    MEDIA_ROOT_DIR_FOR_URLS = None
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -35,12 +50,18 @@ urlpatterns = [
     path("", include("student_interface.urls")),
 ]
 
-# --- Add Media serving for DEVELOPMENT ONLY ---
-if settings.DEBUG and MEDIA_URL_ROOT and MEDIA_ROOT_DIR:
+# --- Media serving for DEVELOPMENT ONLY ---
+# Use the imported/calculated values
+if settings.DEBUG and MEDIA_URL_ROOT and MEDIA_ROOT_DIR_FOR_URLS:
     print(
-        f"DEBUG [Urls]: Adding media static route: URL='{MEDIA_URL_ROOT}', Root='{MEDIA_ROOT_DIR}'"
+        f"DEBUG [Urls]: Adding media static route: URL='{MEDIA_URL_ROOT}', Root='{MEDIA_ROOT_DIR_FOR_URLS}'"
     )
-    urlpatterns += static(MEDIA_URL_ROOT, document_root=MEDIA_ROOT_DIR)
+    # Use the fetched MEDIA_ROOT_DIR_FOR_URLS for document_root
+    urlpatterns += static(MEDIA_URL_ROOT, document_root=MEDIA_ROOT_DIR_FOR_URLS)
+elif settings.DEBUG:
+    print(
+        "WARNING [Urls]: Skipping media file serving setup (MEDIA_URL_ROOT or MEDIA_ROOT_DIR could not be determined)."
+    )
 # --- Refined URL Structure Suggestion ---
 # path('admin/', admin.site.urls),
 # path('auth/', include('authentication.urls')), # Login/logout specific

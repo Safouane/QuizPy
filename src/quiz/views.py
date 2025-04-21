@@ -4,16 +4,24 @@ import json
 import datetime
 import random
 import string
-import copy  # Ensure copy is imported
+import copy
+import sys  # Make sure sys is imported if used by get_base_dir implicitly
 from pathlib import Path
-from django.http import JsonResponse, HttpResponse, Http404
-from django.views.decorators.http import require_http_methods
-from django.conf import settings  # If using settings.MEDIA_URL/ROOT later
-from django.core.files.uploadedfile import UploadedFile  # For type checking
+from django.http import JsonResponse, HttpResponse  # Removed Http404 if not used
+
+# from django.conf import settings # Not needed if using get_media_dir
+from django.core.files.uploadedfile import UploadedFile
 from authentication.decorators import api_teacher_required
 
-# Import the helper function and DATA_FILE path from core.json_storage
-from core.json_storage import load_data, save_data, get_data_file_path
+# --- CORRECTED IMPORT ---
+from core.json_storage import (
+    load_data,
+    save_data,
+    get_media_dir,
+)  # Import get_media_dir
+
+# --- END CORRECTION ---
+import traceback  # Import get_media_dir
 
 
 from django.shortcuts import render
@@ -31,15 +39,12 @@ from authentication.decorators import api_teacher_required
 
 
 # --- Media File Handling Setup ---
-try:
-    MEDIA_ROOT_DIR = get_data_file_path().parent / "media"
-    MEDIA_ROOT_DIR.mkdir(parents=True, exist_ok=True)
-    MEDIA_URL_ROOT = "/media_files/"  # URL prefix for serving
-    print(f"DEBUG [Views]: Media directory set to: {MEDIA_ROOT_DIR}")
-except Exception as e:
-    print(f"CRITICAL ERROR: Could not determine media directory path: {e}")
-    MEDIA_ROOT_DIR = None
-    MEDIA_URL_ROOT = "/media_error/"
+MEDIA_ROOT_DIR = get_media_dir()  # <<< Use the correct helper function
+MEDIA_URL_ROOT = "/media_files/"
+if not MEDIA_ROOT_DIR:
+    print(
+        "CRITICAL ERROR [Views]: Media directory path could not be determined from json_storage."
+    )
 # --- End Media File Handling Setup ---
 
 
@@ -1663,10 +1668,6 @@ def quiz_submit_api(request, quiz_id):
         )
 
 
-# quiz/views.py
-# ... existing imports ...
-
-
 @api_teacher_required
 @require_http_methods(["GET"])
 def get_quiz_attempts_api(request, quiz_id):
@@ -1674,10 +1675,11 @@ def get_quiz_attempts_api(request, quiz_id):
     API endpoint for teachers to retrieve a summary list of attempts
     for a specific quiz.
     """
+    print(f"DEBUG [Attempts API]: Fetching attempts for quiz {quiz_id}")
     try:
         data = load_data()
         all_attempts = data.get("attempts", [])
-        quiz_id_str = str(quiz_id)  # Ensure comparison type consistency
+        quiz_id_str = str(quiz_id)
 
         # Filter attempts for the specific quiz
         quiz_attempts = [
@@ -1685,38 +1687,74 @@ def get_quiz_attempts_api(request, quiz_id):
             for attempt in all_attempts
             if str(attempt.get("quiz_id")) == quiz_id_str
         ]
+        print(
+            f"DEBUG [Attempts API]: Found {len(quiz_attempts)} raw attempts for quiz."
+        )
 
         # Sort attempts, e.g., by submission time descending
         quiz_attempts.sort(key=lambda x: x.get("end_time", ""), reverse=True)
 
-        # Prepare summarized data to return (avoid sending raw answers here)
-        summarized_attempts = [
-            {
+        # Prepare summarized data to return
+        summarized_attempts = []
+        for att in quiz_attempts:
+            # --- CORRECTED STUDENT DETAIL EXTRACTION ---
+            students_in_attempt = att.get(
+                "students", []
+            )  # Get the list of students for this attempt
+            student_name_display = "N/A"
+            student_class_display = ""
+            student_id_display = ""
+
+            if isinstance(students_in_attempt, list) and len(students_in_attempt) > 0:
+                # Format names (handle single or multiple)
+                student_name_display = " & ".join(
+                    [
+                        str(
+                            s.get("name", "N/A")
+                        ).strip()  # Ensure name is string and trim
+                        for s in students_in_attempt
+                        if isinstance(s, dict)  # Check item is dict
+                    ]
+                )
+                # Get class/id from the FIRST student in the list for summary display
+                first_student = students_in_attempt[0]
+                if isinstance(first_student, dict):
+                    student_class_display = str(first_student.get("class", "")).strip()
+                    student_id_display = str(first_student.get("id", "")).strip()
+
+            elif isinstance(
+                att.get("student_info"), dict
+            ):  # Fallback for old structure
+                print(
+                    f"WARNING [Attempts API]: Attempt {att.get('attempt_id')} using old 'student_info'."
+                )
+                legacy_info = att["student_info"]
+                student_name_display = str(legacy_info.get("name", "N/A")).strip()
+                student_class_display = str(legacy_info.get("class", "")).strip()
+                student_id_display = str(legacy_info.get("id", "")).strip()
+            # --- END CORRECTION ---
+
+            # Prepare the summary dictionary for this attempt
+            summary = {
                 "attempt_id": att.get("attempt_id"),
-                "student_name": att.get("student_info", {}).get("name", "N/A"),
-                "student_class": att.get("student_info", {}).get("class", ""),
-                "student_id_number": att.get("student_info", {}).get("id", ""),
+                "student_name": student_name_display,  # Use extracted value
+                "student_class": student_class_display,  # Use extracted value
+                "student_id_number": student_id_display,  # Use extracted value
                 "score_percentage": att.get("percentage"),
                 "passed": att.get("passed"),
-                "submission_time": att.get("end_time"),  # ISO format timestamp
+                "submission_time": att.get("end_time"),
                 "submitted_due_to_timeout": att.get("submitted_due_to_timeout", False),
             }
-            for att in quiz_attempts
-        ]
+            summarized_attempts.append(summary)
 
         print(
-            f"DEBUG: Returning {len(summarized_attempts)} attempt summaries for quiz {quiz_id}"
+            f"DEBUG [Attempts API]: Returning {len(summarized_attempts)} summarized attempts."
         )
         return JsonResponse({"attempts": summarized_attempts})
 
     except Exception as e:
         print(f"Error fetching attempts for quiz {quiz_id}: {e}")
-        import traceback
-
         traceback.print_exc()
-        print(
-            f"DEBUG: Returning {len(summarized_attempts)} attempt summaries for quiz {quiz_id}"
-        )
         return JsonResponse(
             {"error": f"An unexpected error occurred: {str(e)}"}, status=500
         )
