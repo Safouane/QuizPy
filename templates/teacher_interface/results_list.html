@@ -14,21 +14,21 @@
         <select class="form-select" id="quizSelect">
             <option value="" selected>-- Select a Quiz --</option>
             {% for quiz in quizzes %}
-                <option value="{{ quiz.id }}">{{ quiz.title }}</option>
+            <option value="{{ quiz.id }}">{{ quiz.title }}</option>
             {% empty %}
-                 <option value="" disabled>No quizzes available</option>
+            <option value="" disabled>No quizzes available</option>
             {% endfor %}
         </select>
     </div>
     <div class="col-md-6 text-md-end">
         <div class="btn-group" role="group" aria-label="Export options">
-             <button type="button" id="exportJsonBtn" class="btn btn-outline-secondary" disabled>
-                  <i class="bi bi-filetype-json"></i> Export JSON
-             </button>
-             <button type="button" id="exportExcelBtn" class="btn btn-outline-success" disabled>
-                  <i class="bi bi-file-earmark-excel"></i> Export Excel
-             </button>
-         </div>
+            <button type="button" id="exportJsonBtn" class="btn btn-outline-secondary" disabled>
+                <i class="bi bi-filetype-json"></i> Export JSON
+            </button>
+            <button type="button" id="exportExcelBtn" class="btn btn-outline-success" disabled>
+                <i class="bi bi-file-earmark-excel"></i> Export Excel
+            </button>
+        </div>
     </div>
 </div>
 
@@ -119,18 +119,18 @@
         try {
             const response = await fetch(apiUrl); // GET request
             if (!response.ok) {
-                 const errorData = await response.json().catch(() => ({})); // Try get error msg
-                 throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                const errorData = await response.json().catch(() => ({})); // Try get error msg
+                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
             }
             const data = await response.json();
             renderResultsTable(data.attempts || []);
 
             // Enable export buttons if data loaded
             if (data.attempts && data.attempts.length > 0) {
-                 exportJsonBtn.disabled = false;
-                 exportExcelBtn.disabled = false;
-                 exportJsonBtn.dataset.quizId = quizId; // Store ID for export click
-                 exportExcelBtn.dataset.quizId = quizId;
+                exportJsonBtn.disabled = false;
+                exportExcelBtn.disabled = false;
+                exportJsonBtn.dataset.quizId = quizId; // Store ID for export click
+                exportExcelBtn.dataset.quizId = quizId;
             }
 
         } catch (error) {
@@ -144,68 +144,92 @@
 
     function renderResultsTable(attempts) {
         resultsTableBody.innerHTML = ''; // Clear previous
-        if (attempts.length === 0) {
+        console.log("DEBUG [RenderResults]: Rendering table with attempts data:", attempts); // Log the data received by the function
+
+        if (!attempts || attempts.length === 0) {
             noResultsMessage.classList.remove('d-none');
             resultsTableContainer.classList.add('d-none');
+            console.log("DEBUG [RenderResults]: No attempts to render.");
         } else {
-            attempts.forEach(att => {
+            noResultsMessage.classList.add('d-none');
+            attempts.forEach((att, index) => {
                 const row = resultsTableBody.insertRow();
-                const passedText = att.passed ? 'Yes' : 'No';
-                const passedClass = att.passed ? 'text-success' : 'text-danger';
-                const timeoutText = att.submitted_due_to_timeout ? 'Yes' : 'No';
-                const scoreText = att.score_percentage !== null ? `${att.score_percentage.toFixed(1)}%` : 'N/A';
-                // Format timestamp nicely
+                console.log(`DEBUG [RenderResults]: Processing attempt #${index}:`, att); // Log each attempt object
+
+                // --- Re-check Access Logic ---
+                // Access the properties directly from the 'att' object received from the API
+                // Use optional chaining (?.) and nullish coalescing (??) for safety
+                const studentName = escapeHTML(att?.student_name ?? 'N/A');
+                const studentClass = escapeHTML(att?.student_class ?? ''); // Default to empty string if missing
+                const studentIdNum = escapeHTML(att?.student_id_number ?? ''); // Default to empty string if missing
+
+                // --- Check Other Fields ---
+                const passedText = att?.passed ? 'Yes' : 'No';
+                const passedClass = att?.passed ? 'text-success' : 'text-danger';
+                const timeoutText = att?.submitted_due_to_timeout ? 'Yes' : 'No';
+                const scoreValue = att?.score_percentage;
+                const scoreText = (scoreValue !== null && scoreValue !== undefined)
+                    ? `${Number(scoreValue).toFixed(1)}%` : 'N/A';
+
+                // Format timestamp
                 let submissionTime = 'N/A';
                 try {
-                    if (att.submission_time) {
-                         submissionTime = new Date(att.submission_time).toLocaleString();
+                    if (att?.submission_time) { // Use optional chaining
+                        submissionTime = new Date(att.submission_time).toLocaleString();
                     }
-                } catch(e) { console.warn("Could not parse submission time", att.submission_time); }
+                } catch (e) { console.warn("Could not parse submission time", att?.submission_time); }
 
+                // --- Log values right before inserting ---
+                console.log(`DEBUG [RenderResults]: Row ${index} - Name: ${studentName}, Class: ${studentClass}, ID: ${studentIdNum}, Score: ${scoreText}`);
 
+                // --- Check the innerHTML assignment ---
+                // Ensure the variables match EXACTLY what's being set above
                 row.innerHTML = `
-                    <td>${escapeHTML(att.student_name)}</td>
-                    <td>${escapeHTML(att.student_class)}</td>
-                    <td>${escapeHTML(att.student_id_number)}</td>
+                    <td>${studentName}</td>
+                    <td>${studentClass}</td>
+                    <td>${studentIdNum}</td>
                     <td>${scoreText}</td>
                     <td><span class="${passedClass}">${passedText}</span></td>
                     <td>${submissionTime}</td>
                     <td>${timeoutText}</td>
-                    {# Add Actions cell later for view details button #}
+                    {# Add Actions cell later #}
                 `;
             });
             resultsTableContainer.classList.remove('d-none'); // Show table
+            console.log(`DEBUG [RenderResults]: Finished rendering ${attempts.length} rows.`);
         }
-    }
+    } // End renderResultsTable
+
+
 
     function handleExportClick(event) {
         const button = event.currentTarget;
         const quizId = button.dataset.quizId;
         if (!quizId) {
-             console.error("Cannot export, quizId not found on button.");
-             return;
+            console.error("Cannot export, quizId not found on button.");
+            return;
         }
 
         let exportUrl = '';
         if (button.id === 'exportJsonBtn') {
-             exportUrl = `/api/quizzes/${quizId}/attempts/export/json/`;
+            exportUrl = `/api/quizzes/${quizId}/attempts/export/json/`;
         } else if (button.id === 'exportExcelBtn') {
-             exportUrl = `/api/quizzes/${quizId}/attempts/export/excel/`;
+            exportUrl = `/api/quizzes/${quizId}/attempts/export/excel/`;
         }
 
         if (exportUrl) {
-             console.log("Triggering export:", exportUrl);
-             // Navigate directly to trigger download
-             window.location.href = exportUrl;
+            console.log("Triggering export:", exportUrl);
+            // Navigate directly to trigger download
+            window.location.href = exportUrl;
         }
     }
 
     // --- Helper: escapeHTML ---
     function escapeHTML(str) {
-       if (str === null || str === undefined) return '';
-       const div = document.createElement('div');
-       div.textContent = str;
-       return div.innerHTML;
+        if (str === null || str === undefined) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
 </script>

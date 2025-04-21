@@ -1,118 +1,138 @@
 <!-- QuizPy/templates/base.html -->
 {% load static %}
-  <!doctype html>
-    <html lang="en">
-      <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>{% block title %}QuizPy{% endblock %}</title>
-        <!-- Link Bootstrap CSS -->
-        <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-        <!-- Optional: Link custom CSS -->
-        {% block extra_head %}
-          <link href="{% static 'css/custom.css' %}" rel="stylesheet">
-        {% endblock %}
-      </head>
-      <body>
-        <!-- Navigation bar -->
-        <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
-          <div class="container">
-            <a class="navbar-brand" href="{% url 'core:index' %}">QuizPy</a> {# Use url tag for home link too #}
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-              <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-              {# START: Consolidated Nav Items #}
-              <ul class="navbar-nav ms-auto">
-                <li class="nav-item">
-                  <a class="nav-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}" aria-current="page" href="{% url 'core:index' %}">Home</a> {# Use url tag and active class logic #}
-                </li>
+<!doctype html>
+<html lang="en">
 
-                {# Add Login/Logout/Dashboard Links conditionally #}
-                {% if user.is_authenticated and user.is_staff %}
-                <li class="nav-item">
-                  {# <a class="nav-link" href="#">Teacher Dashboard</a> #}
-                  <a class="nav-link {% if request.resolver_match.view_name == 'teacher_interface:dashboard' %}active{% endif %}"
-                     href="{% url 'teacher_interface:dashboard' %}">Teacher Dashboard</a>
-                </li>
-                  <li class="nav-item">
-                      <a class="nav-link" href="#" onclick="event.preventDefault(); document.getElementById('logout-form-js').submit();">Logout ({{ user.username }})</a>
-                  </li>
-                {% else %}
-                  <li class="nav-item">
-                    {# Add active class logic if needed #}
-                    <a class="nav-link {% if request.resolver_match.view_name == 'authentication:login_page' %}active{% endif %}" href="{% url 'authentication:login_page' %}">Teacher Login</a>
-                  </li>
-                {% endif %}
-              </ul>
-              {# END: Consolidated Nav Items #}
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}QuizPy{% endblock %}</title>
 
-              {# Hidden form for JS logout #}
-              {% if user.is_authenticated %}
-              <form id="logout-form-js" action="{% url 'authentication:api_logout' %}" method="POST" style="display: none;">
-                  {% csrf_token %}
-              </form>
-              {# JS to handle the form submission response #}
-              <script>
-              const logoutForm = document.getElementById('logout-form-js');
-              if (logoutForm) {
-                  logoutForm.addEventListener('submit', async (e) => {
-                      e.preventDefault();
-                      const response = await fetch(logoutForm.action, {
-                          method: 'POST',
-                          headers: {
-                              'X-CSRFToken': logoutForm.querySelector('[name=csrfmiddlewaretoken]').value
-                          }
-                      });
-                      // Redirect to home after logout
-                      window.location.href = "{% url 'core:index' %}"; // Use url tag for redirect
-                  });
-              }
-              </script>
-              {% endif %}
-            </div>
-          </div>
-        </nav>
+  {# --- ADD FAVICON LINK --- #}
+  <link rel="shortcut icon" type="image/x-icon" href="{% static 'favicon.ico' %}">
+  {# --- END FAVICON LINK --- #}
 
-        <main class="container my-4"> {# Added some margin #}
-            {% block content %}
-            <!-- Page specific content will go here -->
-            {% endblock %}
-        </main>
 
-        {# Stick footer to bottom if content is short #}
-        <footer class="footer mt-auto py-3 bg-light text-center">
-            <div class="container">
-                <span class="text-muted">QuizPy © {% now "Y" %}</span>
-            </div>
-        </footer>
+  <!-- Link Bootstrap CSS -->
+  <link href="{% static 'bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+  <!-- Optional: Link custom CSS -->
+  {% block extra_head %}
+  <link href="{% static 'css/custom.css' %}" rel="stylesheet">
+  {% endblock %}
+</head>
 
-        <!-- Link Bootstrap JS Bundle (includes Popper) -->
-        <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
-        <!-- Optional: Link custom JS -->
-        {% block extra_scripts %}
-          {# Check if custom.js exists or remove if empty #}
-          {# <script src="{% static 'js/custom.js' %}"></script> #}
-        {% endblock %}
-      </body>
-    </html>
+<body>
+  <!-- Navigation bar -->
+  <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+    <div class="container">
+      <a class="navbar-brand" href="{% url 'core:index' %}">QuizPy</a> {# Use url tag for home link too #}
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav"
+        aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        {# START: Consolidated Nav Items #}
+        <ul class="navbar-nav ms-auto">
+          <li class="nav-item">
+            <a class="nav-link {% if request.resolver_match.url_name == 'index' %}active{% endif %}" aria-current="page"
+              href="{% url 'core:index' %}">Home</a> {# Use url tag and active class logic #}
+          </li>
 
-    {# Add basic CSS to make footer sticky #}
-    {% block extra_head_append %}
-    <style>
-      body {
-        display: flex;
-        flex-direction: column;
-        min-height: 100vh;
-      }
-      main {
-        flex: 1; /* Allows main content to grow */
-      }
-      .footer {
-        flex-shrink: 0; /* Prevent footer from shrinking */
-      }
-    </style>
+          {# Add Login/Logout/Dashboard Links conditionally #}
+          {% if user.is_authenticated and user.is_staff %}
+          <li class="nav-item">
+            {# <a class="nav-link" href="#">Teacher Dashboard</a> #}
+            <a class="nav-link {% if request.resolver_match.view_name == 'teacher_interface:dashboard' %}active{% endif %}"
+              href="{% url 'teacher_interface:dashboard' %}">Teacher Dashboard</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#"
+              onclick="event.preventDefault(); document.getElementById('logout-form-js').submit();">
+              Logout ({{user.username }})</a>
+          </li>
+          {% else %}
+          <li class="nav-item">
+            {# Add active class logic if needed #}
+            <a class="nav-link {% if request.resolver_match.view_name == 'authentication:login_page' %}active{% endif %}"
+              href="{% url 'authentication:login_page' %}">Teacher Login</a>
+          </li>
+          {% endif %}
+        </ul>
+        {# END: Consolidated Nav Items #}
+
+        {# Hidden form for JS logout #}
+        {% if user.is_authenticated %}
+        <form id="logout-form-js" action="{% url 'authentication:api_logout' %}" method="POST" style="display: none;">
+          {% csrf_token %}
+        </form>
+        {# JS to handle the form submission response #}
+        <script>
+          const logoutForm = document.getElementById('logout-form-js');
+          if (logoutForm) {
+            logoutForm.addEventListener('submit', async (e) => {
+              e.preventDefault();
+              const response = await fetch(logoutForm.action, {
+                method: 'POST',
+                headers: {
+                  'X-CSRFToken': logoutForm.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+              });
+              // Redirect to home after logout
+              window.location.href = "{% url 'core:index' %}"; // Use url tag for redirect
+            });
+          }
+        </script>
+        {% endif %}
+      </div>
+    </div>
+  </nav>
+
+  <main class="container my-4"> {# Added some margin #}
+    {% block content %}
+    <!-- Page specific content will go here -->
     {% endblock %}
-  </body>
+  </main>
+
+  {# Stick footer to bottom if content is short #}
+  <footer class="footer mt-auto py-3 bg-light text-center">
+    <div class="container">
+      <span class="text-muted">QuizPy © {% now "Y" %}</span>
+    </div>
+  </footer>
+
+  <!-- Link Bootstrap JS Bundle (includes Popper) -->
+  <script src="{% static 'bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+  <!-- Optional: Link custom JS -->
+  {% block extra_scripts %}
+  {# Check if custom.js exists or remove if empty #}
+  {#
+  <script src="{% static 'js/custom.js' %}"></script> #}
+  {% endblock %}
+</body>
+
+</html>
+
+{# Add basic CSS to make footer sticky #}
+{% block extra_head_append %}
+<style>
+  body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  main {
+    flex: 1;
+    /* Allows main content to grow */
+  }
+
+  .footer {
+    flex-shrink: 0;
+    /* Prevent footer from shrinking */
+  }
+</style>
+{% endblock %}
+</body>
+
 </html>

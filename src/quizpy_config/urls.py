@@ -21,6 +21,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import path, include
 
+
 # Import dynamically calculated media settings from views
 try:
     # Use the correct helper from json_storage to get the directory

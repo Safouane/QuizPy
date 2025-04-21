@@ -14,11 +14,14 @@
     <div class="card text-center h-100">
       <div class="card-body">
         <h5 class="card-title">Active Quizzes</h5>
-        <p class="card-text fs-1">{{ active_quizzes_count }}</p> {# Display count #}
-        <a href="{% url 'teacher_interface:quiz_list' %}" class="btn btn-primary">Manage Quizzes</a> {# Link to TCHR-2 #}
+        <!-- <p class="card-text fs-1">{{ active_quizzes_count }}</p> -->
+        <div class="d-flex flex-wrap justify-content-center gap-2">
+          <a href="{% url 'teacher_interface:quiz_list' %}" class="btn btn-primary">Manage Quizzes</a>
+          <a href="{% url 'teacher_interface:quiz_create' %}" class="btn btn-primary">Create New Quiz</a>
+        </div>
       </div>
       <div class="card-footer text-muted">
-        View and manage your active quizzes.
+        Create, edit, and manage quizzes.
       </div>
     </div>
   </div>
@@ -28,22 +31,13 @@
     <div class="card text-center h-100">
       <div class="card-body">
         <h5 class="card-title">Question Bank</h5>
-        <p class="card-text fs-1">{{ total_questions_count }}</p> {# Display count #}
-        <a href="{% url 'teacher_interface:question_bank' %}" class="btn btn-primary me-2">Manage Questions</a>
-        <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-secondary">Add New Question</a>
-      </div>
-
-      <!-- <div class="card-body">
-        <h5 class="card-title">Question Bank</h5>
-        <p class="card-text fs-1">{{ total_questions_count }}</p>
-        <div class="d-grid gap-3 col-10 mx-auto">
+        <!-- <p class="card-text fs-1">{{ total_questions_count }}</p> -->
+        <div class="d-flex flex-wrap justify-content-center gap-2">
           <a href="{% url 'teacher_interface:question_bank' %}" class="btn btn-primary">Manage Questions</a>
-          <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-secondary">Add New Question</a>
+          <a href="{% url 'teacher_interface:question_create' %}" class="btn btn-primary">Add New Question</a>
         </div>
-      </div> -->
-
-
-       <div class="card-footer text-muted">
+      </div>
+      <div class="card-footer text-muted">
         Add, edit, and organize questions.
       </div>
     </div>
@@ -54,33 +48,28 @@
     <div class="card text-center h-100">
       <div class="card-body">
         <h5 class="card-title">Student Results</h5>
-         <p class="card-text fs-1">-</p> {# TODO: Count recent results? #}
-         {# --- MODIFIED LINK --- #}
+        <!-- <p class="card-text fs-1">-</p> -->
         <a href="{% url 'teacher_interface:results_list' %}" class="btn btn-info">View Results</a>
-         {# --- END MODIFIED LINK --- #}
       </div>
-       <div class="card-footer text-muted">
+      <div class="card-footer text-muted">
         Review student performance and export data.
       </div>
     </div>
   </div>
-   {# Add more cards for Settings, Import/Export etc. as needed #}
 </div>
 
 {# Quick Actions or Recent Activity Section (Optional) #}
 <div class="row">
-    <div class="col">
-        <h2>Quick Actions</h2>
-        {# Example: Button to create a new quiz directly #}
-        <a href="#" class="btn btn-success mb-3 disabled"> <i class="bi bi-plus-circle"></i> Create New Quiz </a> {# Link to TCHR-2 create action later #}
-        {# Add other quick links here #}
-    </div>
+  <div class="col">
+    <h2>Quick Actions</h2>
+    <a href="{% url 'teacher_interface:quiz_create' %}" class="btn btn-success mb-3 enabled"> <i class="bi bi-plus-circle"></i> Create New Quiz </a> 
+  </div>
 </div>
 
 {% endblock %}
 
 {% block extra_head %}
-    {{ block.super }} {# Include parent block content #}
-    {# Optional: Add link to Bootstrap Icons if you want to use them #}
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+{{ block.super }} {# Include parent block content #}
+{# Optional: Add link to Bootstrap Icons if you want to use them #}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 {% endblock %}
